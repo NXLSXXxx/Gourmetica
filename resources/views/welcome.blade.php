@@ -78,6 +78,29 @@
                     :class="activeSlide === i ? 'bg-white scale-125 w-6' : 'bg-white/40 hover:bg-white/60'"></button>
         </template>
     </div>
+    </div>
+</section>
+@else
+<!-- Fallback Hero -->
+@php
+    $fallbackBanner = \App\Models\Banner::where('type', 'fallback_hero')->where('is_active', true)->first();
+    $fallbackImage = $fallbackBanner ? asset('storage/' . $fallbackBanner->image_path) : asset('images/hero.png');
+@endphp
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 relative">
+    <div class="banner-hero relative h-[500px] flex items-center justify-center overflow-hidden rounded-[2rem] shadow-2xl"
+         style="background-image: url('{{ $fallbackImage }}'); background-size: cover; background-position: center;">
+        <div class="absolute inset-0 bg-gradient-to-br from-brand-secondary/95 via-brand-secondary/80 to-brand-primary/60"></div>
+        <div class="absolute top-20 left-10 w-64 h-64 bg-brand-primary/10 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-20 right-10 w-96 h-96 bg-white/5 rounded-full blur-3xl"></div>
+        <div class="relative z-10 text-center max-w-4xl px-4">
+            <h1 class="text-5xl md:text-7xl font-serif font-black text-white mb-6 leading-none tracking-tight">
+                El Arte de la<br>
+                <span class="text-brand-primary italic">Pastelería Fina</span>
+            </h1>
+            <p class="text-xl text-white/70 font-medium mb-10">Descubre nuestra selección de postres artesanales, elaborados con pasión y los mejores ingredientes.</p>
+            <a href="/shop" class="btn-pide shadow-xl inline-block">Nuestra Carta</a>
+        </div>
+    </div>
 </section>
 @endif
 
@@ -102,7 +125,10 @@
 <!-- 3. Services Grid -->
 <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-24">
     <div class="text-center mb-12">
-        <h2 class="text-3xl font-serif font-bold text-brand-secondary tracking-widest uppercase italic">Nuestros servicios, a tu medida</h2>
+        <h2 class="text-4xl font-serif font-black text-brand-secondary tracking-tight">
+            Nuestros servicios,<br>
+            <span class="text-brand-primary italic">a tu medida</span>
+        </h2>
     </div>
     
     @php
@@ -111,28 +137,32 @@
         $locationsBanner = \App\Models\Banner::where('type', 'section_locations')->where('is_active', true)->first();
     @endphp
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
         <!-- Catering -->
-        <div class="service-card group">
-            <div class="service-image group-hover:scale-105 transition-transform duration-700 bg-brand-secondary/10" {!! $cateringBanner ? 'style="background-image: url('.asset('storage/'.$cateringBanner->image_path).');"' : '' !!}></div>
-            <div class="service-content">
-                <h3 class="text-brand-secondary">Catering</h3>
-                <p>Haz de tus celebraciones momentos inolvidables con nuestra selección exclusiva de bocaditos y tortas.</p>
-                <div class="flex justify-center">
-                    <a href="/catering" class="btn-pill px-10 py-4 bg-brand-primary text-white">Coordina tu evento</a>
-                </div>
+        <a href="/catering" class="group relative overflow-hidden rounded-[2.5rem] shadow-xl min-h-[450px] flex items-end block">
+            <div class="absolute inset-0 bg-brand-secondary/10 group-hover:scale-105 transition-transform duration-700 z-0" 
+                 {!! $cateringBanner ? 'style="background-image: url('.asset('storage/'.$cateringBanner->image_path).'); background-size: cover; background-position: center;"' : 'style="background-image: url('.asset('images/cakes.png').'); background-size: cover; background-position: center;"' !!}></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-brand-secondary via-brand-secondary/60 to-transparent z-10"></div>
+            <div class="relative z-20 p-10 md:p-14 w-full">
+                <span class="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-3 block">Servicio Especial</span>
+                <h3 class="text-4xl font-serif font-black text-white mb-4 leading-tight">Catering</h3>
+                <p class="text-white/80 font-medium leading-relaxed mb-8 max-w-sm">Haz de tus celebraciones momentos inolvidables con nuestra selección exclusiva de bocaditos y tortas.</p>
+                <span class="inline-flex items-center gap-2 text-white font-bold uppercase tracking-widest text-xs group-hover:text-white/80 transition-colors">
+                    Coordina tu evento 
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                </span>
             </div>
-        </div>
+        </a>
 
         <!-- Corporate -->
-        <div class="service-card group">
-            <div class="service-image group-hover:scale-105 transition-transform duration-700 bg-brand-secondary/10" {!! $corporateBanner ? 'style="background-image: url('.asset('storage/'.$corporateBanner->image_path).');"' : '' !!}></div>
-            <div class="service-content">
-                <h3 class="text-brand-secondary">Pedidos Corporativos</h3>
-                <p>Sorprende a tu equipo y clientes con el detalle más dulce. Soluciones personalizadas para empresas.</p>
-                <div class="flex justify-center">
-                    <a href="/corporate" class="btn-pill px-10 py-4 bg-brand-primary text-white">Coordina tu pedido</a>
-                </div>
+        <div class="group relative overflow-hidden rounded-[2.5rem] shadow-xl min-h-[450px] flex items-end">
+            <div class="absolute inset-0 bg-brand-secondary/10 group-hover:scale-105 transition-transform duration-700 z-0" 
+                 {!! $corporateBanner ? 'style="background-image: url('.asset('storage/'.$corporateBanner->image_path).'); background-size: cover; background-position: center;"' : 'style="background-image: url('.asset('images/hero.png').'); background-size: cover; background-position: center;"' !!}></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-brand-secondary via-brand-secondary/60 to-transparent z-10"></div>
+            <div class="relative z-20 p-10 md:p-14 w-full">
+                <span class="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-3 block">Para Empresas</span>
+                <h3 class="text-4xl font-serif font-black text-white mb-4 leading-tight">Pedidos Corporativos</h3>
+                <p class="text-white/80 font-medium leading-relaxed max-w-sm">Sorprende a tu equipo y clientes con el detalle más dulce. Soluciones personalizadas para empresas.</p>
             </div>
         </div>
     </div>
@@ -147,18 +177,75 @@
     @endif
 </section>
 
-<!-- 5. Locations Shortcut -->
-<section class="py-20 bg-brand-primary text-white overflow-hidden relative mb-24 rounded-[3rem] mx-4 sm:mx-8 lg:mx-12" {!! $locationsBanner ? 'style="background-image: url('.asset('storage/'.$locationsBanner->image_path).'); background-size: cover; background-position: center;"' : '' !!}>
-    @if($locationsBanner)
-    <div class="absolute inset-0 bg-brand-primary/80"></div>
-    @endif
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-        <h2 class="text-4xl md:text-6xl font-black mb-8 italic uppercase tracking-tighter">Encuéntranos cerca de ti</h2>
-        <p class="text-xl opacity-90 mb-12 max-w-2xl mx-auto">
-            Tenemos más de 10 casas listas para recibirte y endulzar tu día.
-        </p>
-        <div class="flex justify-center">
-            <a href="/locations" class="btn-pill bg-white text-brand-primary px-12 py-4 hover:bg-brand-secondary hover:text-white border-none">VER NUESTRAS CASAS</a>
+<!-- 5. Locations Shortcut - Premium CTA -->
+<section class="relative mb-24 mx-4 sm:mx-8 lg:mx-12 overflow-hidden rounded-[3rem]" 
+         {!! $locationsBanner ? 'style="background-image: url('.asset('storage/'.$locationsBanner->image_path).'); background-size: cover; background-position: center;"' : 'style="background-color: #3D2B1F;"' !!}>
+    <!-- Overlay gradient -->
+    <div class="absolute inset-0 bg-gradient-to-br from-brand-secondary/95 via-brand-secondary/85 to-brand-primary/70"></div>
+    
+    <!-- Decorative pulsing circles -->
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+        <div class="w-[600px] h-[600px] rounded-full border border-white/5 animate-ping" style="animation-duration: 4s;"></div>
+    </div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+        <div class="w-[400px] h-[400px] rounded-full border border-white/8 animate-ping" style="animation-duration: 3s; animation-delay: 0.5s;"></div>
+    </div>
+    
+    <!-- Floating decorative blobs -->
+    <div class="absolute -top-20 -left-20 w-72 h-72 bg-brand-primary/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-20 -right-20 w-96 h-96 bg-brand-primary/15 rounded-full blur-3xl pointer-events-none"></div>
+
+    <!-- Content -->
+    <div class="relative z-10 py-24 px-4 sm:px-8 lg:px-16">
+        <div class="max-w-5xl mx-auto text-center">
+            <!-- Badge -->
+            <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2 mb-8">
+                <span class="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></span>
+                <span class="text-white/80 text-xs font-bold uppercase tracking-widest">Siempre cerca de ti</span>
+            </div>
+            
+            <!-- Heading -->
+            <h2 class="text-5xl md:text-7xl lg:text-8xl font-black uppercase italic tracking-tighter text-white leading-none mb-6">
+                Encuéntranos<br>
+                <span class="text-brand-primary">cerca de ti</span>
+            </h2>
+            
+            <p class="text-lg md:text-xl text-white/70 mb-12 max-w-2xl mx-auto font-medium leading-relaxed">
+                Más de <strong class="text-white">10 casas Gourmetica</strong> en la ciudad, listas para recibirte con el aroma del pan recién horneado y el sabor que enamora.
+            </p>
+
+            <!-- Stats Row -->
+            <div class="flex flex-wrap items-center justify-center gap-8 md:gap-16 mb-14">
+                <div class="text-center">
+                    <span class="block text-4xl md:text-5xl font-black text-brand-primary">10+</span>
+                    <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">Sedes</span>
+                </div>
+                <div class="w-px h-12 bg-white/20 hidden md:block"></div>
+                <div class="text-center">
+                    <span class="block text-4xl md:text-5xl font-black text-brand-primary">7</span>
+                    <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">Días a la semana</span>
+                </div>
+                <div class="w-px h-12 bg-white/20 hidden md:block"></div>
+                <div class="text-center">
+                    <span class="block text-4xl md:text-5xl font-black text-brand-primary">100%</span>
+                    <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">Artesanal</span>
+                </div>
+            </div>
+            
+            <!-- CTA Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a href="/locations" 
+                   class="group relative inline-flex items-center gap-3 bg-brand-primary hover:bg-white text-white hover:text-brand-secondary font-black uppercase tracking-widest text-sm px-10 py-5 rounded-full transition-all duration-300 shadow-2xl shadow-brand-primary/40 hover:shadow-brand-primary/20 hover:scale-105">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Ver Nuestras Casas
+                    <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+                <a href="https://wa.me/{{ $contact_whatsapp }}" target="_blank"
+                   class="inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white font-bold uppercase tracking-widest text-sm px-10 py-5 rounded-full transition-all duration-300 hover:scale-105">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" class="w-5 h-5" alt="WhatsApp">
+                    Escríbenos
+                </a>
+            </div>
         </div>
     </div>
 </section>

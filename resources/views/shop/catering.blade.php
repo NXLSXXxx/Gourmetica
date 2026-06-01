@@ -3,17 +3,58 @@
 @section('title', 'Catering y Eventos | Gourmetica')
 
 @section('content')
-<!-- Hero Section -->
-<section class="relative py-32 bg-brand-primary text-white overflow-hidden">
-    <div class="absolute inset-0 opacity-10 bg-brand-secondary"></div>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-        <span class="text-brand-secondary font-bold tracking-widest uppercase mb-4 block">Eventos Inolvidables</span>
-        <h1 class="text-5xl md:text-7xl font-serif font-bold mb-8">Servicio de Catering</h1>
-        <p class="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
+@php
+    $heroBanner = \App\Models\Banner::where('type', 'catering_hero')->where('is_active', true)->first();
+    $heroImage = $heroBanner ? asset('storage/' . $heroBanner->image_path) : asset('images/cakes.png');
+@endphp
+<!-- Hero Section with background image -->
+<section class="banner-hero relative min-h-[70vh] flex items-center justify-center overflow-hidden"
+         style="background-image: url('{{ $heroImage }}'); background-size: cover; background-position: center;">
+    <!-- Layered overlays -->
+    <div class="absolute inset-0 bg-gradient-to-br from-brand-secondary/96 via-brand-secondary/85 to-brand-primary/60"></div>
+    
+    <!-- Decorative blobs -->
+    <div class="absolute top-20 right-10 w-72 h-72 bg-brand-primary/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-10 left-10 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none"></div>
+    
+    <!-- Pulsing ring -->
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full border border-white/5 animate-ping pointer-events-none" style="animation-duration: 4s;"></div>
+    
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2 mb-8">
+            <span class="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></span>
+            <span class="text-white/80 text-xs font-bold uppercase tracking-widest">Eventos Inolvidables</span>
+        </div>
+        
+        <h1 class="text-6xl md:text-8xl font-serif font-black text-white mb-6 leading-none tracking-tight">
+            Servicio de<br>
+            <span class="text-brand-primary italic">Catering</span>
+        </h1>
+        <p class="text-xl text-white/70 max-w-3xl mx-auto leading-relaxed font-medium">
             Llevamos la excelencia de Gourmetica a tus celebraciones. Diseñamos mesas de postres exclusivas y menús personalizados para bodas, eventos corporativos y ocasiones especiales.
         </p>
+
+        <!-- Quick stats -->
+        <div class="flex flex-wrap items-center justify-center gap-8 md:gap-12 mt-12">
+            <div class="text-center">
+                <span class="block text-3xl font-black text-brand-primary">+200</span>
+                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Eventos realizados</span>
+            </div>
+            <div class="w-px h-10 bg-white/20 hidden md:block"></div>
+            <div class="text-center">
+                <span class="block text-3xl font-black text-brand-primary">100%</span>
+                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Personalizado</span>
+            </div>
+            <div class="w-px h-10 bg-white/20 hidden md:block"></div>
+            <div class="text-center">
+                <span class="block text-3xl font-black text-brand-primary">5★</span>
+                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Calificación</span>
+            </div>
+        </div>
     </div>
 </section>
+
 
 <!-- Form Section -->
 <section class="py-24 bg-brand-bg relative">

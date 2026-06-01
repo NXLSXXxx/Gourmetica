@@ -37,6 +37,15 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-secondary);
 }
 
+.banner-hero h1 {
+    color: white;
+}
+
+h1.text-white, h2.text-white, h3.text-white, h4.text-white,
+h5.text-white, h6.text-white {
+    color: white;
+}
+
 /* Premium Utilities */
 .glass {
     background: white;
@@ -134,36 +143,57 @@ h1, h2, h3, h4, h5, h6 {
 
 .card-premium {
     background: white;
-    border-radius: var(--radius-card);
+    border-radius: 1.5rem;
     transition: var(--transition-smooth);
-    border: 1px solid transparent;
+    border: 1px solid #f3f4f6;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .card-premium:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-premium);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 40px -8px rgba(61, 43, 31, 0.12);
     border-color: var(--color-primary);
+}
+
+.group-hover\:scale-108 {
+    transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.group:hover .group-hover\:scale-108 {
+    transform: scale(1.08);
 }
 
 .pill-category {
     padding: 0.5rem 1.5rem;
     border-radius: var(--radius-pill);
-    font-weight: 600;
-    font-size: 0.875rem;
+    font-weight: 700;
+    font-size: 0.8rem;
     white-space: nowrap;
-    transition: var(--transition-smooth);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: 2px solid transparent;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
 }
 
 .pill-category.active {
     background: var(--color-primary);
     color: white;
+    box-shadow: 0 4px 12px rgba(233, 161, 113, 0.3);
 }
 
 .pill-category:not(.active) {
     background: white;
     color: var(--color-text-muted);
     border-color: #f3f4f6;
+}
+
+.pill-category:not(.active):hover {
+    background: rgba(233, 161, 113, 0.08);
+    border-color: rgba(233, 161, 113, 0.3);
+    color: var(--color-primary);
+    transform: translateY(-1px);
 }
 
 .btn-pill {
@@ -185,8 +215,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Mega Menu */
 .mega-menu {
-    position: absolute;
-    top: 100%;
+    position: fixed;
+    top: 128px; /* header (64px) + subnav (~44px) + border */
     left: 0;
     right: 0;
     background: white;
@@ -196,7 +226,7 @@ h1, h2, h3, h4, h5, h6 {
     visibility: hidden;
     transform: translateY(10px);
     transition: all 0.4s ease;
-    z-index: 100;
+    z-index: 9000;
 }
 
 .group:hover .mega-menu {
