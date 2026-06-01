@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@100..900&display=swap');
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+:root {
+    /* Brand Colors - Based on Logo */
+    --color-primary: #E9A171;    /* Peach Orange from Logo */
+    --color-secondary: #3D2B1F;  /* Deep Coffee/Chocolate */
+    --color-bg: #FFFBF7;         /* Warm Paper White */
+    --color-accent: #7C9473;     /* Sprout Green */
+    --color-text: #2D1B14;
+    --color-text-muted: #8B7E74;
+    
+    /* Typography */
+    --font-heading: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
+    
+    /* Spacing & Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+@theme {
+    --font-sans: var(--font-body);
+    --font-serif: var(--font-heading);
+    --color-brand-primary: var(--color-primary);
+    --color-brand-secondary: var(--color-secondary);
+    --color-brand-bg: var(--color-bg);
+}
+
+/* Custom Base Styles */
+body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: var(--color-primary);
+}
+
+/* Premium Utilities */
+.glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.text-gradient {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.btn-premium {
+    background: var(--color-primary);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: var(--transition-smooth);
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-premium:hover {
+    background: var(--color-secondary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-premium);
+}
