@@ -1,911 +1,891 @@
 @extends('layouts.app')
 
-@section('title', 'Finalizar Pedido | Gourmetica')
+@section('title', 'Checkout | Gourmetica')
 
 @push('styles')
-<!-- Leaflet Map CSS for Premium Address Pinning -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
+    body {
+        background-color: #E5E5E5; /* Light grey background similar to image */
+    }
     #map {
-        height: 320px;
+        height: 220px;
         width: 100%;
-        border-radius: 24px;
-        border: 2px solid #F1F5F9;
         z-index: 10;
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-        transition: all 0.3s ease;
-    }
-    .leaflet-container {
-        font-family: inherit;
-    }
-    /* Dynamic Address suggestions custom styles */
-    .search-suggestions {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: white;
-        border: 1px solid #E2E8F0;
-        border-radius: 16px;
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-        max-height: 250px;
-        overflow-y: auto;
-        z-index: 999;
-        margin-top: 4px;
+        border-radius: 12px;
+        margin-top: 10px;
     }
     .suggestion-item {
-        padding: 14px 18px;
+        padding: 12px 16px;
         font-size: 13px;
-        color: #334155;
         cursor: pointer;
-        border-bottom: 1px solid #F1F5F9;
-        transition: all 0.2s ease;
+        border-bottom: 1px solid #F3F4F6;
     }
-    .suggestion-item:last-child {
-        border-bottom: none;
+    .suggestion-item:hover { background-color: #F9FAFB; }
+
+    /* Custom Switch Toggle */
+    .toggle-checkbox:checked {
+        right: 0;
+        border-color: #111827; 
     }
-    .suggestion-item:hover {
-        background-color: #FFFBF7;
-        color: #E2B182;
-        padding-left: 24px;
+    .toggle-checkbox:checked + .toggle-label {
+        background-color: #111827;
     }
+
+    /* Modal animations */
+    .modal-enter {
+        opacity: 0;
+        transform: scale(0.95);
+        transition: all 0.2s ease-out;
+    }
+    .modal-enter-active {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 @endpush
 
 @section('content')
-<div class="bg-brand-bg min-h-screen py-20" id="checkout-root">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 class="text-4xl font-serif font-bold text-brand-primary mb-10 text-center">Finalizar Pedido</h1>
+@php
+    $cartTotal = 0;
+    foreach(session('cart', []) as $item) {
+        $cartTotal += $item['price'] * $item['quantity'];
+    }
+@endphp
 
-        <form action="{{ route('orders.store') }}" method="POST" id="checkout-form">
-            @csrf
-            <input type="hidden" name="culqi_token" id="culqi_token">
-            <input type="hidden" name="shipping_type" id="shipping_type" value="pickup">
-            <input type="hidden" name="latitude" id="latitude">
-            <input type="hidden" name="longitude" id="longitude">
+<!-- Modals Overlay Container -->
+<div id="modal-overlay" class="fixed inset-0 bg-black/50 z-[100] hidden items-center justify-center p-4 overflow-y-auto">
+    
+    <!-- Modal 1: Forma de Compra (Location) -->
+    <div id="modal-location" class="modal-box hidden bg-white w-full max-w-xl rounded-3xl shadow-2xl relative flex flex-col max-h-[90vh]">
+        <div class="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
+            <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+            <h3 class="font-bold text-gray-900 text-lg">Selecciona tu forma de compra</h3>
+            <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900 bg-gray-100 rounded-full p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        
+        <div class="p-6 overflow-y-auto no-scrollbar flex-1">
+            <!-- Tabs -->
+            <div class="flex gap-2 mb-6 justify-center max-w-sm mx-auto">
+                <button type="button" id="tab-pickup" onclick="setShippingType('pickup')" class="flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-white text-black text-sm transition-all shadow-sm">Recojo en tienda</button>
+                <button type="button" id="tab-delivery" onclick="setShippingType('delivery')" class="flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-black text-white text-sm transition-all shadow-sm">Delivery</button>
+            </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                <!-- Left: Delivery & Sede Info -->
-                <div class="lg:col-span-2 space-y-8">
-                    
-                    <!-- Tabs for Shipping Type (Pickup vs. Delivery) -->
-                    <div class="bg-white p-4 rounded-2xl shadow-md border border-gray-100 flex gap-2">
-                        <button type="button" id="tab-pickup" onclick="setShippingType('pickup')" class="flex-1 py-4 text-center rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-brand-secondary text-brand-dark shadow-sm">
-                            🛍️ Recojo en Tienda
-                        </button>
-                        <button type="button" id="tab-delivery" onclick="setShippingType('delivery')" class="flex-1 py-4 text-center rounded-xl font-bold transition-all text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2">
-                            🛵 Envío a Domicilio (Delivery)
-                        </button>
+            <!-- Content Pickup -->
+            <div id="modal-pickup-content" class="space-y-4">
+                <p class="text-center text-xs font-bold text-gray-900 mb-4">Selecciona el local para recoger</p>
+                @foreach($headquarters as $hq)
+                <label class="flex items-start p-4 border border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-50 [&:has(:checked)]:border-black [&:has(:checked)]:bg-gray-50">
+                    <input type="radio" name="modal_pickup_hq" value="{{ $hq->id }}" class="mt-0.5 text-black focus:ring-black" {{ $loop->first ? 'checked' : '' }} data-name="{{ $hq->name }}" data-address="{{ $hq->address }}">
+                    <div class="ml-3">
+                        <span class="block font-bold text-sm text-gray-900">{{ $hq->name }}</span>
+                        <span class="block text-xs text-gray-500 mt-1">{{ $hq->address }}</span>
                     </div>
+                </label>
+                @endforeach
+            </div>
 
-                    <!-- Pickup (Sede Selection) Card -->
-                    <div id="pickup-section" class="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 space-y-6">
-                        <div class="flex items-center">
-                            <div class="w-10 h-10 bg-brand-secondary/10 rounded-full flex items-center justify-center text-brand-secondary mr-4">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                            </div>
-                            <h2 class="text-2xl font-serif font-bold text-brand-primary">¿Dónde recoges tu pedido?</h2>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            @foreach($headquarters as $hq)
-                            <label class="relative cursor-pointer">
-                                <input type="radio" name="pickup_headquarter_id" value="{{ $hq->id }}" class="peer sr-only" {{ (session('selected_headquarter_id') == $hq->id || (!session('selected_headquarter_id') && $loop->first)) ? 'checked' : '' }} onchange="selectPickupHq(this.value)">
-                                <div class="p-6 border-2 border-gray-100 rounded-2xl transition-all peer-checked:border-brand-secondary peer-checked:bg-brand-secondary/5 hover:bg-gray-50">
-                                    <h4 class="font-bold text-brand-primary">{{ $hq->name }}</h4>
-                                    <p class="text-xs text-gray-500 mt-1">{{ $hq->address }}</p>
-                                    <p class="text-[10px] text-brand-secondary font-bold mt-2 uppercase tracking-widest">Disponible para hoy</p>
-                                </div>
-                            </label>
-                            @endforeach
-                        </div>
-                    </div>
-
-                    <!-- Delivery Information Card -->
-                    <div id="delivery-section" class="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 space-y-6 hidden">
-                        <div class="flex items-center">
-                            <div class="w-10 h-10 bg-brand-secondary/10 rounded-full flex items-center justify-center text-brand-secondary mr-4">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                            </div>
-                            <h2 class="text-2xl font-serif font-bold text-brand-primary">Dirección de Envío</h2>
-                        </div>
-
-                        <!-- City selector to initialize center coordinates -->
-                        <div>
-                            <label class="block text-xs uppercase font-extrabold text-brand-primary mb-2">Selecciona tu Ciudad</label>
-                            <select id="delivery-city" onchange="onCityChange(this.value)" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3.5 text-xs text-brand-primary outline-none focus:border-brand-secondary transition-all">
-                                <option value="">Selecciona tu ciudad...</option>
-                                <option value="Lima">Lima</option>
-                                <option value="Chiclayo">Chiclayo (Torres Paz 567)</option>
-                            </select>
-                        </div>
-
-                        <!-- Real-time Address Autocomplete -->
-                        <div class="relative space-y-2">
-                            <label class="block text-xs uppercase font-extrabold text-brand-primary">🔍 Busca tu Dirección Exacta (Calle, Avenida o Lugar)</label>
-                            <div class="relative">
-                                <input type="text" id="address-search-input" oninput="searchAddress(this.value)" placeholder="Empieza a escribir (ej: Av. Larco, Chiclayo)..." class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3.5 text-xs text-brand-primary placeholder-gray-400 outline-none focus:border-brand-secondary transition-all" disabled>
-                                <div id="search-spinner" class="absolute right-4 top-3.5 hidden">
-                                    <span class="w-4 h-4 border-2 border-brand-secondary border-t-transparent rounded-full animate-spin block"></span>
-                                </div>
-                            </div>
-                            <div id="suggestions-dropdown" class="search-suggestions hidden"></div>
-                        </div>
-
-                        <!-- Interactive Map container with Location Detection -->
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <label class="block text-xs uppercase font-extrabold text-brand-primary">
-                                    📍 Ubica tu casa en el mapa
-                                </label>
-                                <button type="button" onclick="detectMyLocation()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-secondary hover:text-brand-dark text-white text-[10px] font-extrabold shadow-sm transition-all hover:scale-105 cursor-pointer">
-                                    🎯 Detectar Mi Ubicación
-                                </button>
-                            </div>
-                            <div id="map"></div>
-                        </div>
-
-                        <!-- Dynamic Distance & Pricing Indicator Badge -->
-                        <div id="distance-pricing-badge" class="p-5 rounded-2xl border flex items-center justify-between transition-all duration-300 hidden">
-                            <div class="flex items-center gap-3">
-                                <span class="text-2xl" id="badge-icon">📍</span>
-                                <div class="flex-1 pr-4">
-                                    <h4 class="font-bold text-brand-primary text-xs uppercase" id="badge-title">Esperando ubicación...</h4>
-                                    <p class="text-[11px] text-gray-500 mt-0.5" id="badge-desc">Por favor, escribe tu calle en el buscador o arrastra el pin en el mapa para ubicar tu casa exacta.</p>
-                                </div>
-                            </div>
-                            <div class="text-right flex-shrink-0">
-                                <span class="font-serif font-extrabold text-lg text-amber-600" id="badge-price">S/ --.--</span>
-                                <p class="text-[9px] text-amber-500 font-bold uppercase tracking-wider mt-0.5" id="badge-status">Ubicación Pendiente</p>
-                            </div>
-                        </div>
-
-                        <!-- Manual Address details -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-xs uppercase font-extrabold text-brand-primary mb-2">Dirección de Entrega (Ej: Calle Torres Paz 567, Dpto 201)</label>
-                                <input type="text" name="address" id="delivery_address" placeholder="Ej: Calle Torres Paz 567, Dpto 201" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3.5 text-xs text-brand-primary placeholder-gray-400 outline-none focus:border-brand-secondary transition-all">
-                            </div>
-                            <div>
-                                <label class="block text-xs uppercase font-extrabold text-brand-primary mb-2">Referencia de Entrega (Opcional)</label>
-                                <input type="text" id="delivery_reference" placeholder="Ej: Frente al parque infantil, reja verde" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3.5 text-xs text-brand-primary placeholder-gray-400 outline-none focus:border-brand-secondary transition-all">
-                            </div>
-                        </div>
-
-                        <!-- Dynamic delivery zone inputs -->
-                        <input type="hidden" name="delivery_zone_id" id="delivery_zone_id">
-
-                        <!-- Headquarters dispatch dispatching notice -->
-                        <div id="delivery-dispatch-hq-box" class="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-600 flex items-center gap-2.5 hidden">
-                            <span class="text-lg">🏬</span>
-                            <div>
-                                <p class="font-bold text-brand-primary">Sede Despachadora:</p>
-                                <p id="delivery-dispatch-hq-name" class="font-medium text-brand-secondary"></p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Payment Method Card -->
-                    <div class="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
-                        <div class="flex items-center mb-6">
-                            <div class="w-10 h-10 bg-brand-secondary/10 rounded-full flex items-center justify-center text-brand-secondary mr-4">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                            </div>
-                            <h2 class="text-2xl font-serif font-bold text-brand-primary">Método de Pago</h2>
-                        </div>
-
-                        <div class="space-y-4">
-                            <label class="flex items-center p-4 border-2 border-brand-secondary bg-brand-secondary/5 rounded-2xl cursor-pointer">
-                                <input type="radio" name="payment_method" value="culqi" class="w-5 h-5 text-brand-secondary" checked>
-                                <div class="ml-4">
-                                    <span class="block font-bold text-brand-primary">Tarjeta de Crédito / Débito (Culqi)</span>
-                                    <span class="text-xs text-gray-500">Pago seguro procesado por Culqi</span>
-                                </div>
-                                <div class="ml-auto flex gap-2">
-                                    <img src="https://vignette.wikia.nocookie.net/logopedia/images/b/b5/Visa_2014.svg/revision/latest?cb=20151124115124" class="h-4">
-                                    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" class="h-4">
-                                </div>
-                            </label>
-                            
-                            <label class="flex items-center p-4 border-2 border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50">
-                                <input type="radio" name="payment_method" value="transfer" class="w-5 h-5 text-brand-secondary">
-                                <div class="ml-4">
-                                    <span class="block font-bold text-brand-primary">Transferencia Bancaria / Yape</span>
-                                    <span class="text-xs text-gray-500">Adjunta tu constancia después de pedir</span>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
+            <!-- Content Delivery -->
+            <div id="modal-delivery-content" class="hidden space-y-4">
+                <p class="text-center text-xs font-bold text-gray-900 mb-4">Establece una dirección de envío</p>
+                <div class="relative">
+                    <input type="text" id="address-search-input" placeholder="Escribe la dirección de entrega" class="w-full border-gray-200 rounded-xl text-sm pl-10 focus:ring-black focus:border-black bg-gray-50">
+                    <div class="absolute left-3 top-3"><svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg></div>
+                    <div id="suggestions-dropdown" class="search-suggestions hidden bg-white absolute w-full border border-gray-200 shadow-lg rounded-xl mt-1 z-50"></div>
                 </div>
 
-                <!-- Right: Summary -->
-                <div class="lg:col-span-1">
-                    <div class="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 sticky top-24">
-                        <h3 class="text-xl font-serif font-bold mb-8 border-b border-gray-100 pb-4 text-brand-primary">Resumen del Pedido</h3>
-                        
-                        <div class="space-y-4 mb-8">
-                            @php $cartTotal = 0; @endphp
-                            @forelse(session('cart', []) as $item)
-                                @php $cartTotal += $item['price'] * $item['quantity']; @endphp
-                                <div class="flex justify-between items-start text-sm">
-                                    <div class="flex-1 pr-4">
-                                        <p class="font-bold text-brand-secondary">{{ $item['quantity'] }}x {{ $item['name'] }}</p>
-                                        <p class="text-[10px] text-gray-400 uppercase tracking-widest">{{ implode(', ', $item['options']) }}</p>
-                                    </div>
-                                    <span class="font-bold text-brand-secondary">S/ {{ number_format($item['price'] * $item['quantity'], 2) }}</span>
-                                </div>
-                            @empty
-                                <p class="text-gray-400 italic text-center">Tu carrito está vacío</p>
-                            @endforelse
-                        </div>
-
-                        <!-- Real-time price breakdown -->
-                        <div class="space-y-3 border-t border-gray-100 pt-6">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Subtotal Productos</span>
-                                <span class="text-brand-secondary font-medium" id="summary-subtotal">S/ {{ number_format($cartTotal, 2) }}</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Costo de Envío</span>
-                                <span class="text-emerald-500 font-bold uppercase text-[10px]" id="summary-delivery">Gratis</span>
-                            </div>
-                            <div class="flex justify-between text-xl font-serif font-bold pt-4 border-t border-dashed border-gray-100">
-                                <span class="text-brand-secondary">Total</span>
-                                <span class="text-brand-primary" id="summary-total">S/ {{ number_format($cartTotal, 2) }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Form hidden fields to pass active headquarter -->
-                        <input type="hidden" name="headquarter_id" id="form-headquarter-id" value="">
-
-                        <button type="submit" id="submit-order-btn" class="w-full mt-8 btn-premium py-5 text-lg shadow-xl shadow-brand-primary/20">
-                            PAGAR AHORA
-                        </button>
-                        
-                        <p class="text-[10px] text-gray-400 text-center mt-6 uppercase tracking-widest">
-                            Pago 100% Seguro • Gourmetica Artisanal
-                        </p>
+                <div class="mt-6 border border-gray-100 rounded-2xl p-4 bg-gray-50 shadow-inner">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-sm text-gray-900">Detalle de la dirección actual</h4>
+                        <button type="button" class="text-gray-500" onclick="detectMyLocation()"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                    </div>
+                    <p id="modal-address-preview" class="text-xs text-gray-600 mb-3">Dirección no seleccionada</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="text" id="modal_delivery_reference" placeholder="Piso/Oficina/Dpto" class="w-full border-gray-200 rounded-lg text-xs bg-white">
+                        <input type="text" id="modal_delivery_city" placeholder="Referencia de la dirección" class="w-full border-gray-200 rounded-lg text-xs bg-white">
+                    </div>
+                    <div class="mt-3 border border-gray-200 rounded-xl overflow-hidden p-1 bg-white">
+                        <div id="map"></div>
                     </div>
                 </div>
             </div>
-        </form>
+        </div>
+        
+        <div class="p-5 border-t border-gray-100 shrink-0">
+            <button type="button" onclick="saveLocationModal()" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-3 rounded-full text-sm shadow-md transition-all">Confirmar Ubicación</button>
+        </div>
     </div>
+
+    <!-- Modal 2: Teléfono -->
+    <div id="modal-phone" class="modal-box hidden bg-white w-full max-w-md rounded-3xl shadow-2xl relative flex flex-col">
+        <div class="flex justify-between items-center p-5 border-b border-gray-100">
+            <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+            <h3 class="font-bold text-gray-900 text-lg">Editar número de teléfono</h3>
+            <div class="w-6"></div> <!-- Spacer for center alignment -->
+        </div>
+        <div class="p-6">
+            <div class="flex gap-3">
+                <div class="w-1/3">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">País</label>
+                    <select class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-black">
+                        <option>+51 (PE)</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Número de teléfono</label>
+                    <input type="tel" id="modal-input-phone" placeholder="987654321" class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-black">
+                </div>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100">
+            <button type="button" onclick="savePhoneModal()" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-3 rounded-full text-sm shadow-md transition-all">Guardar</button>
+        </div>
+    </div>
+
+    <!-- Modal 3: Fecha -->
+    <div id="modal-date" class="modal-box hidden bg-white w-full max-w-md rounded-3xl shadow-2xl relative flex flex-col">
+        <div class="flex items-center p-5 border-b border-gray-100">
+            <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900 mr-4"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+            <div>
+                <h3 class="font-bold text-gray-900 text-lg">Programa tu entrega</h3>
+                <p class="text-xs text-gray-500">Selecciona fecha y horario según disponibilidad.</p>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="flex gap-2">
+                <div class="w-1/2">
+                    <select id="modal-input-date" class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 font-bold focus:ring-black">
+                        <option value="Hoy">Hoy</option>
+                        <option value="Mañana">Mañana</option>
+                    </select>
+                </div>
+                <div class="w-1/2">
+                    <select id="modal-input-time" class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 font-bold focus:ring-black">
+                        <option value="Lo antes posible">Lo antes posible</option>
+                        <option value="Tarde (2:00pm - 6:00pm)">Tarde (2:00pm - 6:00pm)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100">
+            <button type="button" onclick="saveDateModal()" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-3 rounded-full text-sm shadow-md transition-all">Actualizar</button>
+        </div>
+    </div>
+
+    <!-- Modal 4: Facturación -->
+    <div id="modal-billing" class="modal-box hidden bg-white w-full max-w-lg rounded-3xl shadow-2xl relative flex flex-col">
+        <div class="flex items-center p-5 border-b border-gray-100">
+            <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900 mr-4"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+            <h3 class="font-bold text-gray-900 text-lg">Opciones de facturación</h3>
+        </div>
+        <div class="p-6">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Tipo de comprobante</label>
+            <select id="modal-invoice-type" onchange="toggleInvoiceModalFields(this.value)" class="w-full border-gray-200 rounded-xl text-sm mb-4 focus:ring-black">
+                <option value="boleta">Boleta con DNI</option>
+                <option value="factura">Factura</option>
+            </select>
+
+            <!-- Boleta Fields -->
+            <div id="modal-fields-boleta" class="space-y-4">
+                <div class="flex gap-4">
+                    <div class="w-1/3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Tipo de documento</label>
+                        <select class="w-full border-gray-200 rounded-xl text-sm focus:ring-black"><option>DNI</option><option>CE</option></select>
+                    </div>
+                    <div class="w-2/3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Documento</label>
+                        <input type="text" id="modal-boleta-doc" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Apellido paterno</label>
+                        <input type="text" id="modal-boleta-ap" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Apellido materno</label>
+                        <input type="text" id="modal-boleta-am" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Nombres</label>
+                        <input type="text" id="modal-boleta-name" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Factura Fields -->
+            <div id="modal-fields-factura" class="hidden space-y-4">
+                <div class="flex gap-4">
+                    <div class="w-1/3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">RUC</label>
+                        <input type="text" id="modal-factura-ruc" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                    <div class="w-2/3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Razón social</label>
+                        <input type="text" id="modal-factura-rs" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Dirección</label>
+                    <input type="text" id="modal-factura-dir" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
+                </div>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100">
+            <button type="button" onclick="saveBillingModal()" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-3 rounded-full text-sm shadow-md transition-all">Actualizar</button>
+        </div>
+    </div>
+
+    <!-- Modal 5: Fuera de Cobertura -->
+    <div id="modal-no-coverage" class="modal-box hidden bg-white w-full max-w-md rounded-3xl shadow-2xl relative flex flex-col p-6 text-center animate-fade">
+        <div class="flex justify-end">
+            <button type="button" onclick="closeModal()" class="text-gray-400 hover:text-gray-900 bg-gray-100 rounded-full p-1"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        
+        <div class="flex flex-col items-center my-4">
+            <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-[#E50000]">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            
+            <h3 class="font-bold text-gray-900 text-xl mb-2">¡Fuera de Cobertura!</h3>
+            <p class="text-xs text-gray-500 max-w-xs leading-relaxed">
+                Lo sentimos, la dirección elegida está fuera del rango de reparto express para esta sede. ¡Pero no te quedes sin tu pedido! Te sugerimos estas opciones:
+            </p>
+        </div>
+        
+        <div class="space-y-3 mt-2">
+            <!-- Opción 1: Cambiar a Recojo -->
+            <button type="button" onclick="switchToPickup()" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                🛍️ Cambiar a Recojo en Tienda
+            </button>
+            
+            <!-- Opción 2: Intentar otra ubicación -->
+            <button type="button" onclick="tryDifferentAddress()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                📍 Elegir otra ubicación
+            </button>
+            
+            <!-- Opción 3: Coordinar por WhatsApp -->
+            <a href="https://wa.me/{{ $contact_whatsapp ?? '950664655' }}?text=Hola,%20mi%20dirección%20está%20fuera%20de%20cobertura%20en%20la%20web%20y%20quisiera%20coordinar%20un%20envío%20personalizado." target="_blank" class="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-3 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                💬 Coordinar envío por WhatsApp
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<!-- MAIN PAGE -->
+<div class="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8" id="checkout-root">
+    
+    @if(session('error'))
+        <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <span class="block sm:inline">{{ session('error') }}</span>
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <ul class="list-disc list-inside text-sm">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="mb-6 flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <button class="text-gray-900"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+            <h1 class="text-2xl font-bold text-gray-900">Checkout</h1>
+        </div>
+        <!-- Logo placeholder -->
+        <h2 class="hidden md:block text-red-600 font-extrabold text-xl tracking-tighter">GOURMETICA</h2>
+    </div>
+
+    <form action="{{ route('orders.store') }}" method="POST" id="checkout-form">
+        @csrf
+        <input type="hidden" name="culqi_token" id="culqi_token">
+        
+        <!-- Hidden Inputs for Syncing Modal Data -->
+        <input type="hidden" name="shipping_type" id="form_shipping_type" value="pickup">
+        <input type="hidden" name="headquarter_id" id="form_pickup_hq" value="{{ session('selected_headquarter_id') ?? $headquarters->first()->id ?? '' }}">
+        <input type="hidden" name="latitude" id="form_latitude">
+        <input type="hidden" name="longitude" id="form_longitude">
+        <input type="hidden" name="address" id="form_delivery_address">
+        <input type="hidden" name="phone" id="form_phone">
+        <input type="hidden" name="delivery_date" id="form_date">
+        <input type="hidden" name="delivery_time" id="form_time">
+        <input type="hidden" name="invoice_type" id="form_invoice_type" value="boleta">
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Column: Preview Blocks -->
+            <div class="lg:col-span-7 space-y-4">
+                
+                <!-- Badge: Tiempo de entrega -->
+                <div class="bg-gray-100 rounded-t-2xl px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                        <h2 class="font-bold text-gray-900 text-base">Tiempo de entrega</h2>
+                    </div>
+                    <span class="text-gray-900 text-sm">Programado</span>
+                </div>
+
+                <!-- Block 1: Ubicación / Entrega -->
+                <div class="bg-white px-6 py-5 rounded-2xl shadow-sm relative group">
+                    <div class="flex gap-4">
+                        <div class="mt-1"><svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg></div>
+                        <div class="flex-1 pr-16">
+                            <p class="text-sm font-bold text-gray-900" id="main-preview-shipping-title">Recojo en Tienda: {{ $headquarters->first()->name ?? 'SELECCIONE' }}</p>
+                            <p class="text-xs text-gray-500 mt-1" id="main-preview-shipping-desc">{{ $headquarters->first()->address ?? 'Elige local' }}</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="openModal('modal-location')" class="absolute top-5 right-6 text-sm font-bold text-red-600 hover:underline">Cambiar</button>
+                </div>
+
+                <!-- Block 2: Teléfono -->
+                <div class="bg-white px-6 py-5 rounded-2xl shadow-sm relative group">
+                    <div class="flex gap-4 items-center">
+                        <div><svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></div>
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900" id="main-preview-phone">Teléfono del comprador</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="openModal('modal-phone')" class="absolute top-5 right-6 text-sm font-bold text-red-600 hover:underline" id="btn-phone">Agregar</button>
+                </div>
+
+                <!-- Block 3: Fecha y Hora -->
+                <div class="bg-white px-6 py-5 rounded-2xl shadow-sm relative group">
+                    <div class="flex gap-4 items-start">
+                        <div class="mt-0.5"><svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900">Fecha y hora de entrega</p>
+                            <p class="text-xs text-gray-500 mt-1" id="main-preview-date">Agrega fecha</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="openModal('modal-date')" class="absolute top-5 right-6 text-sm font-bold text-red-600 hover:underline">Agregar</button>
+                </div>
+
+                <!-- Block 4: Datos Personales (Inline as per image) -->
+                <div class="bg-gray-100 px-6 py-5 rounded-2xl mt-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
+                        <h2 class="font-bold text-gray-900 text-base">Datos personales</h2>
+                    </div>
+                    <div class="space-y-3 pl-7">
+                        <div class="flex items-center gap-3">
+                            <label class="w-20 text-xs font-medium text-gray-700 text-right">Nombres:</label>
+                            <input type="text" name="first_name" value="{{ auth()->user()->name ?? '' }}" class="flex-1 border-gray-300 rounded text-sm bg-transparent border-0 border-b focus:ring-0 focus:border-black p-1" required>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="w-20 text-xs font-medium text-gray-700 text-right">Apellidos:</label>
+                            <input type="text" name="last_name" class="flex-1 border-gray-300 rounded text-sm bg-transparent border-0 border-b focus:ring-0 focus:border-black p-1" required>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="w-20 text-xs font-medium text-gray-700 text-right">Email:</label>
+                            <input type="email" name="email" value="{{ auth()->user()->email ?? '' }}" class="flex-1 border-gray-300 rounded text-sm bg-transparent border-0 border-b focus:ring-0 focus:border-black p-1" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Block 5: Facturación -->
+                <div class="bg-white px-6 py-5 rounded-2xl shadow-sm relative group mt-2 border border-gray-100">
+                    <div class="flex gap-4 items-start">
+                        <div class="mt-0.5"><svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg></div>
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900">Facturación</p>
+                            <p class="text-xs text-gray-500 mt-1" id="main-preview-billing">Seleccione un tipo de factura</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="openModal('modal-billing')" class="absolute top-5 right-6 text-sm font-bold text-red-600 hover:underline">Cambiar</button>
+                </div>
+
+                <!-- Block 6: Extras de la torta -->
+                <div class="space-y-4 pt-4">
+                    <!-- Breve Dedicatoria -->
+                    <div class="bg-gray-100 px-6 py-4 rounded-xl flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                            <span class="text-sm font-bold text-gray-900">¿Deseas una breve dedicatoria sobre la torta?</span>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" name="has_dedicatoria_torta" id="main-toggle-torta" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer z-10"/>
+                            <label for="main-toggle-torta" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div id="main-dedicatoria-torta-box" class="hidden px-6">
+                        <input type="text" name="dedicatoria_torta" placeholder="Mensaje..." class="w-full border-gray-200 rounded-xl text-sm focus:ring-black focus:border-black">
+                    </div>
+
+                    <!-- Tarjeta -->
+                    <div class="bg-gray-100 px-6 py-4 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-5L9 4H4zm7 5a1 1 0 10-2 0v1H8a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V9z" clip-rule="evenodd"></path></svg>
+                                <span class="text-sm font-bold text-gray-900">¿Deseas tarjeta de dedicatoria?</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500 ml-8" id="text-tarjeta">El pedido se entregará con la tarjeta de dedicatoria.</p>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" name="has_tarjeta" id="main-toggle-tarjeta" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer z-10" checked/>
+                            <label for="main-toggle-tarjeta" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-900 cursor-pointer"></label>
+                        </div>
+                    </div>
+
+                    <!-- Es un Regalo -->
+                    <div class="bg-gray-100 px-6 py-4 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clip-rule="evenodd"></path><path d="M9 11H3v5a2 2 0 002 2h4v-7zM11 18h4a2 2 0 002-2v-5h-6v7z"></path></svg>
+                                <span class="text-sm font-bold text-gray-900">¿Es un regalo?</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500 ml-8" id="text-gift">El pedido se entregará sin boleta / factura</p>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" name="is_gift" id="main-toggle-gift" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer z-10"/>
+                            <label for="main-toggle-gift" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Block 7: Información de pago -->
+                <div class="pt-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                        <h2 class="font-bold text-gray-900 text-base">Información de pago</h2>
+                    </div>
+                    
+                    <div class="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
+                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="payment_method" value="culqi" class="text-black focus:ring-black" checked>
+                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Tarjeta de Crédito / Débito</span>
+                        </label>
+                        
+                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="payment_method" value="yape" class="text-black focus:ring-black">
+                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Yape</span>
+                        </label>
+                        
+                        <label class="flex items-center p-3 cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="payment_method" value="plin" class="text-black focus:ring-black">
+                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Plin</span>
+                        </label>
+                    </div>
+
+                    <div class="mt-4 px-2">
+                        <p class="text-sm font-bold text-gray-700 hover:text-black cursor-pointer">Tengo un cupón de descuento</p>
+                    </div>
+
+                    <div class="space-y-3 mt-6 px-2">
+                        <label class="flex items-start cursor-pointer">
+                            <input type="checkbox" class="mt-1 border-gray-300 rounded text-black focus:ring-black" required>
+                            <span class="ml-2 text-xs text-gray-600">Acepto los términos y condiciones</span>
+                        </label>
+                        <label class="flex items-start cursor-pointer">
+                            <input type="checkbox" class="mt-1 border-gray-300 rounded text-black focus:ring-black">
+                            <span class="ml-2 text-xs text-gray-600">Quisiera recibir promociones y descuentos</span>
+                        </label>
+                    </div>
+
+                    <button type="submit" id="submit-order-btn" class="w-full bg-[#E50000] hover:bg-red-700 text-white font-bold py-4 rounded-full shadow-lg transition-all text-center mt-6">
+                        Finalizar pedido <span id="btn-total">S/ {{ number_format($cartTotal, 2) }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Sidebar (Detalle del pedido) -->
+            <div class="lg:col-span-5">
+                <div class="bg-gray-100 p-6 md:p-8 rounded-3xl sticky top-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Detalle del pedido</h3>
+                    
+                    <div class="space-y-6 mb-6">
+                        @forelse(session('cart', []) as $item)
+                            <div class="flex gap-4 items-center">
+                                <div class="w-16 h-16 bg-white rounded-lg flex-shrink-0 border border-gray-200 overflow-hidden">
+                                    <img src="{{ $item['image_url'] ?? 'https://via.placeholder.com/150' }}" alt="Img" class="w-full h-full object-cover">
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <h4 class="font-bold text-sm text-gray-900 pr-2">{{ $item['name'] }}</h4>
+                                        <span class="font-bold text-sm text-red-600 whitespace-nowrap">S/ {{ number_format($item['price'], 2) }}</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1 line-clamp-2">Torta rellena con ingredientes premium. Rinde aprox porciones.</p>
+                                    <div class="mt-2 text-xs font-bold text-gray-500">Cantidad: {{ $item['quantity'] }}</div>
+                                </div>
+                            </div>
+                        @empty
+                            <p class="text-gray-400 text-sm text-center">Tu carrito está vacío</p>
+                        @endforelse
+                    </div>
+
+                    <div class="space-y-2 pt-4 border-t border-gray-200">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Subtotal:</span>
+                            <span class="text-gray-900 font-bold" id="summary-subtotal">S/ {{ number_format($cartTotal, 2) }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Envío:</span>
+                            <span class="text-gray-900 font-bold" id="summary-delivery">S/ 0.00</span>
+                        </div>
+                        <div class="flex justify-between items-end pt-3 mt-3 border-t border-gray-300">
+                            <span class="text-base font-bold text-gray-900">Total:</span>
+                            <span class="text-2xl font-bold text-gray-900" id="summary-total">S/ {{ number_format($cartTotal, 2) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
 </div>
 @endsection
 
 @push('scripts')
 <script src="https://checkout.culqi.com/js/v4"></script>
-<!-- Leaflet Map JS for Premium Address Pinning -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXo-Lpvk7_PQ6KnL4XjxA5ux1pHsopYTk&libraries=places&callback=initGoogleMap&loading=async" async defer></script>
 <script>
-    const headquarters = @json($headquarters);
-    const deliveryZones = @json($deliveryZones);
     const cartTotal = parseFloat("{{ $cartTotal }}");
-    
-    // Coordinates mapping for Physical Headquarters
-    const hqCoordinates = {
-        'Lima': [-12.0945, -77.0341], // Sede Central Lima (San Isidro/Miraflores)
-        'Chiclayo': [-6.77137, -79.84411] // Sede Chiclayo (Torres Paz 567)
-    };
-
-    // Track selected state
     let selectedShippingType = 'pickup';
-    let selectedPickupHqId = '';
     let selectedDeliveryPrice = 0;
-    let isWithinCoverage = false;
-
-    // Leaflet map variables
+    
     let map = null;
     let marker = null;
-    let autocompleteTimeout = null;
-    let activePolygonsOnMap = [];
+    let autocomplete = null;
+    let geocoder = null;
+    let currentModal = null;
 
-    // Initialize pickup headquarter selection from default checked element
-    window.addEventListener('DOMContentLoaded', () => {
-        const checkedHq = document.querySelector('input[name="pickup_headquarter_id"]:checked');
-        if (checkedHq) {
-            selectPickupHq(checkedHq.value);
-        }
-        initMap();
-    });
+    // Callback called when Google Maps script finishes loading
+    function initGoogleMap() {
+        const input = document.getElementById('address-search-input');
+        if (!input) return;
 
-    function initMap() {
-        // Initialize Map centered on Lima
-        map = L.map('map', {
-            zoomControl: true,
-            scrollWheelZoom: false
-        }).setView(hqCoordinates['Lima'], 13);
-
-        // Highly modern and clean map style (CartoDB Voyager)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(map);
-
-        // Beautiful custom icon
-        const markerIcon = L.icon({
-            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
+        autocomplete = new google.maps.places.Autocomplete(input, {
+            componentRestrictions: { country: 'pe' }
         });
 
-        marker = L.marker(hqCoordinates['Lima'], {
-            draggable: true,
-            icon: markerIcon
-        }).addTo(map);
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (!place.geometry) return;
 
-        // Calculate distance immediately after dragging marker
-        marker.on('dragend', function (event) {
-            const position = marker.getLatLng();
-            document.getElementById('latitude').value = position.lat;
-            document.getElementById('longitude').value = position.lng;
-            calculateAndApplyPolygonPricing(position.lat, position.lng);
-            reverseGeocode(position.lat, position.lng);
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+
+            document.getElementById('form_latitude').value = lat;
+            document.getElementById('form_longitude').value = lng;
+            document.getElementById('modal-address-preview').innerText = "Lat: " + lat.toFixed(4) + ", Lng: " + lng.toFixed(4);
+
+            if (map && marker) {
+                const pos = { lat: lat, lng: lng };
+                map.setCenter(pos);
+                map.setZoom(16);
+                marker.setPosition(pos);
+            }
         });
 
-        // Crucial fix: Recalculate map sizes when window or layouts change size
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 100);
+        geocoder = new google.maps.Geocoder();
     }
 
-    function setShippingType(type) {
-        selectedShippingType = type;
-        document.getElementById('shipping_type').value = type;
-
-        const tabPickup = document.getElementById('tab-pickup');
-        const tabDelivery = document.getElementById('tab-delivery');
-        const pickupSection = document.getElementById('pickup-section');
-        const deliverySection = document.getElementById('delivery-section');
-
-        if (type === 'pickup') {
-            tabPickup.className = "flex-1 py-4 text-center rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-brand-secondary text-brand-dark shadow-sm";
-            tabDelivery.className = "flex-1 py-4 text-center rounded-xl font-bold transition-all text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2";
-            pickupSection.style.display = "block";
-            deliverySection.style.display = "none";
+    // Initialize Map explicitly inside modal when opened
+    function initMapOnce() {
+        if (!map && typeof google !== 'undefined') {
+            const chiclayo = { lat: -6.7719, lng: -79.8441 };
             
-            // Set fields
-            const checkedHq = document.querySelector('input[name="pickup_headquarter_id"]:checked');
-            if (checkedHq) {
-                selectPickupHq(checkedHq.value);
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: chiclayo,
+                zoom: 15,
+                disableDefaultUI: false
+            });
+
+            marker = new google.maps.Marker({
+                position: chiclayo,
+                map: map,
+                draggable: true
+            });
+
+            marker.addListener('dragend', () => {
+                const pos = marker.getPosition();
+                const lat = pos.lat();
+                const lng = pos.lng();
+                document.getElementById('form_latitude').value = lat;
+                document.getElementById('form_longitude').value = lng;
+                document.getElementById('modal-address-preview').innerText = "Lat: " + lat.toFixed(4) + ", Lng: " + lng.toFixed(4);
+                
+                reverseGeocode(lat, lng);
+            });
+        }
+    }
+
+    // Reverse geocoding using Google Geocoder
+    function reverseGeocode(lat, lng) {
+        if (!geocoder) return;
+        geocoder.geocode({ location: { lat: parseFloat(lat), lng: parseFloat(lng) } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                let addr = results[0].formatted_address;
+                addr = addr.replace(', Peru', '').replace(', Perú', '');
+                document.getElementById('address-search-input').value = addr;
             }
-            
-            selectedDeliveryPrice = 0;
-            isWithinCoverage = true;
-            document.getElementById('submit-order-btn').disabled = false;
-            updatePrices();
-        } else {
-            tabPickup.className = "flex-1 py-4 text-center rounded-xl font-bold transition-all text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2";
-            tabDelivery.className = "flex-1 py-4 text-center rounded-xl font-bold transition-all bg-brand-secondary text-brand-dark shadow-sm";
-            pickupSection.style.display = "none";
-            deliverySection.style.display = "block";
-
-            // CRITICAL FIX: Re-render and resize Leaflet maps instantly to prevent grey grid visual glitch!
-            setTimeout(() => {
-                map.invalidateSize(true);
-            }, 50);
-
-            // Check if coordinates represent raw Hq center coordinates
-            const lat = parseFloat(document.getElementById('latitude').value);
-            const lng = parseFloat(document.getElementById('longitude').value);
-            const city = document.getElementById('delivery-city').value;
-            
-            if (city && hqCoordinates[city] && lat === hqCoordinates[city][0] && lng === hqCoordinates[city][1]) {
-                resetPricingToPending();
-            } else if (lat && lng) {
-                calculateAndApplyPolygonPricing(lat, lng);
-            } else {
-                resetPricingToPending();
-            }
-        }
+        });
     }
 
-    function selectPickupHq(hqId) {
-        selectedPickupHqId = hqId;
-        if (selectedShippingType === 'pickup') {
-            document.getElementById('form-headquarter-id').value = hqId;
-        }
-    }
-
-    // Handle City dropdown selection
-    function onCityChange(city) {
-        const searchInput = document.getElementById('address-search-input');
-        const dispatchBox = document.getElementById('delivery-dispatch-hq-box');
-        const dispatchHqName = document.getElementById('delivery-dispatch-hq-name');
-        
-        searchInput.disabled = true;
-        searchInput.value = '';
-        dispatchBox.style.display = 'none';
-        
-        selectedDeliveryPrice = 0;
-        updatePrices();
-
-        // Clear existing polygons from map
-        activePolygonsOnMap.forEach(p => map.removeLayer(p));
-        activePolygonsOnMap = [];
-
-        if (!city) {
-            document.getElementById('distance-pricing-badge').style.display = 'none';
-            return;
-        }
-
-        // Center map to selected city coords (Base Center position)
-        if (hqCoordinates[city]) {
-            map.setView(hqCoordinates[city], 13);
-            marker.setLatLng(hqCoordinates[city]);
-            document.getElementById('latitude').value = hqCoordinates[city][0];
-            document.getElementById('longitude').value = hqCoordinates[city][1];
-            
-            // Re-draw tiles safely
-            setTimeout(() => {
-                map.invalidateSize(true);
-            }, 100);
-
-            // Draw coverage areas for this specific city on the checkout map live!
-            const matchingHq = headquarters.find(hq => hq.city.toLowerCase() === city.toLowerCase() || hq.name.toLowerCase().includes(city.toLowerCase()));
-            if (matchingHq) {
-                // Find all delivery zones for this headquarter
-                const zones = deliveryZones.filter(z => z.headquarter_id == matchingHq.id);
-                zones.forEach(zone => {
-                    if (zone.coordinates) {
-                        try {
-                            const coords = JSON.parse(zone.coordinates);
-                            if (coords && coords.length > 2) {
-                                const poly = L.polygon(coords, {
-                                    color: '#E9A171',
-                                    fillColor: '#E9A171',
-                                    fillOpacity: 0.15,
-                                    weight: 1.5,
-                                    dashArray: '4, 4'
-                                }).addTo(map);
-                                
-                                poly.bindTooltip(zone.name, {
-                                    permanent: true,
-                                    direction: 'center',
-                                    className: 'text-[9px] font-bold text-brand-secondary bg-white/80 border border-brand-secondary/20 px-1 py-0.5 rounded shadow-sm opacity-80'
-                                });
-
-                                activePolygonsOnMap.push(poly);
-                            }
-                        } catch(e) {
-                            console.error('Error drawing checkout polygon preview:', e);
-                        }
-                    }
-                });
-            }
-
-            resetPricingToPending();
-        }
-
-        // Enable search input
-        searchInput.disabled = false;
-
-        // Find the headquarter matching this city
-        const matchingHq = headquarters.find(hq => hq.city.toLowerCase() === city.toLowerCase() || hq.name.toLowerCase().includes(city.toLowerCase()));
-        
-        if (matchingHq) {
-            document.getElementById('form-headquarter-id').value = matchingHq.id;
-            dispatchHqName.textContent = `${matchingHq.name} (${matchingHq.address})`;
-            dispatchBox.style.display = 'flex';
-        }
-    }
-
-    function resetPricingToPending() {
-        const badge = document.getElementById('distance-pricing-badge');
-        const badgeTitle = document.getElementById('badge-title');
-        const badgeDesc = document.getElementById('badge-desc');
-        const badgePrice = document.getElementById('badge-price');
-        const badgeStatus = document.getElementById('badge-status');
-        const badgeIcon = document.getElementById('badge-icon');
-        const submitBtn = document.getElementById('submit-order-btn');
-
-        badge.style.display = 'flex';
-        badgeTitle.textContent = "Esperando ubicación...";
-        badgeDesc.innerHTML = "Hemos sombreado nuestra <b>Zona de Cobertura en color naranja</b> en el mapa. Por favor, escribe tu calle o arrastra el pin dentro del área sombreada.";
-        badgePrice.textContent = "S/ --.--";
-        badgePrice.className = "font-serif font-extrabold text-lg text-amber-600";
-        badgeStatus.textContent = "Ubicación Pendiente";
-        badgeStatus.className = "text-[9px] text-amber-500 font-bold uppercase tracking-wider mt-0.5";
-        badgeIcon.textContent = "📍";
-        badge.className = "p-5 rounded-2xl border border-amber-100 bg-amber-50/20 flex items-center justify-between transition-all duration-300";
-
-        selectedDeliveryPrice = 0;
-        isWithinCoverage = false;
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.5';
-        
-        updatePrices();
-    }
-
-    // GPS Detector function
+    // Geolocation
     function detectMyLocation() {
-        if (!navigator.geolocation) {
-            alert('Tu navegador o dispositivo no soporta la geolocalización.');
-            return;
-        }
+        if (navigator.geolocation) {
+            const btn = document.querySelector('#modal-delivery-content button[onclick="detectMyLocation()"]');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span style="font-size:0.75rem; color:var(--primary);">Buscando...</span>';
+            
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                document.getElementById('form_latitude').value = lat;
+                document.getElementById('form_longitude').value = lng;
+                document.getElementById('modal-address-preview').innerText = "Lat: " + lat.toFixed(4) + ", Lng: " + lng.toFixed(4);
 
-        const submitBtn = document.getElementById('submit-order-btn');
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.5';
-
-        navigator.geolocation.getCurrentPosition(position => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-
-            document.getElementById('latitude').value = lat;
-            document.getElementById('longitude').value = lon;
-
-            // Instantly center map and move marker
-            map.setView([lat, lon], 16);
-            marker.setLatLng([lat, lon]);
-
-            // Detect closest Gourmetica headquarters (Lima or Chiclayo)
-            let closestHqKey = 'Lima';
-            let closestDistance = Infinity;
-
-            for (const key in hqCoordinates) {
-                const dist = calculateHaversineDistance(lat, lon, hqCoordinates[key][0], hqCoordinates[key][1]);
-                if (dist < closestDistance) {
-                    closestDistance = dist;
-                    closestHqKey = key;
+                const pos = { lat: lat, lng: lng };
+                if (map && marker) {
+                    map.setCenter(pos);
+                    map.setZoom(16);
+                    marker.setPosition(pos);
                 }
-            }
 
-            // Select closest city dropdown option
-            document.getElementById('delivery-city').value = closestHqKey;
-            
-            // Trigger city change visual updates but bypass the centering reset so map stays on user GPS
-            const searchInput = document.getElementById('address-search-input');
-            const dispatchBox = document.getElementById('delivery-dispatch-hq-box');
-            const dispatchHqName = document.getElementById('delivery-dispatch-hq-name');
-            
-            searchInput.disabled = false;
-            searchInput.value = '';
-            
-            // Draw coverage polygons for the closest city
-            activePolygonsOnMap.forEach(p => map.removeLayer(p));
-            activePolygonsOnMap = [];
-
-            const matchingHq = headquarters.find(hq => hq.city.toLowerCase() === closestHqKey.toLowerCase() || hq.name.toLowerCase().includes(closestHqKey.toLowerCase()));
-            if (matchingHq) {
-                document.getElementById('form-headquarter-id').value = matchingHq.id;
-                dispatchHqName.textContent = `${matchingHq.name} (${matchingHq.address})`;
-                dispatchBox.style.display = 'flex';
-
-                const zones = deliveryZones.filter(z => z.headquarter_id == matchingHq.id);
-                zones.forEach(zone => {
-                    if (zone.coordinates) {
-                        try {
-                            const coords = JSON.parse(zone.coordinates);
-                            if (coords && coords.length > 2) {
-                                const poly = L.polygon(coords, {
-                                    color: '#E9A171',
-                                    fillColor: '#E9A171',
-                                    fillOpacity: 0.15,
-                                    weight: 1.5,
-                                    dashArray: '4, 4'
-                                }).addTo(map);
-                                
-                                poly.bindTooltip(zone.name, {
-                                    permanent: true,
-                                    direction: 'center',
-                                    className: 'text-[9px] font-bold text-brand-secondary bg-white/80 border border-brand-secondary/20 px-1 py-0.5 rounded shadow-sm opacity-80'
-                                });
-                                activePolygonsOnMap.push(poly);
-                            }
-                        } catch(e) {
-                            console.error(e);
-                        }
-                    }
-                });
-            }
-
-            // Calculate distance and geocode address text from GPS coordinates
-            calculateAndApplyPolygonPricing(lat, lon);
-            reverseGeocode(lat, lon);
-
-            setTimeout(() => {
-                map.invalidateSize(true);
-            }, 100);
-
-        }, error => {
-            console.error('Error detecting location:', error);
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
-            alert('No pudimos acceder a tu GPS. Por favor, selecciona tu ciudad y escribe tu dirección en el buscador.');
-        }, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        });
+                reverseGeocode(lat, lng);
+                btn.innerHTML = originalHTML;
+            }, function(error) {
+                alert("No se pudo obtener la ubicación: " + error.message);
+                btn.innerHTML = originalHTML;
+            });
+        } else {
+            alert("La geolocalización no está soportada por este navegador.");
+        }
     }
 
-    // Ray-Casting Algorithm for Point-in-Polygon validation (100% accurate!)
-    function isPointInPolygon(point, polygon) {
-        const x = point[0], y = point[1];
-        let inside = false;
-        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-            const xi = polygon[i][0], yi = polygon[i][1];
-            const xj = polygon[j][0], yj = polygon[j][1];
-            
-            const intersect = ((yi > y) !== (yj > y))
-                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-            if (intersect) inside = !inside;
-        }
-        return inside;
-    }
+    // Fetch delivery pricing from Gourmetica backend (which asks Nakama Delivery API)
+    function fetchDeliveryPrice(lat, lng, callback) {
+        const confirmBtn = document.querySelector('#modal-location button[onclick="saveLocationModal()"]');
+        const originalText = confirmBtn.innerText;
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = "Calculando costo de envío...";
 
-    // Point-in-Polygon dynamic validation
-    function calculateAndApplyPolygonPricing(lat, lng) {
-        const city = document.getElementById('delivery-city').value;
-        const badge = document.getElementById('distance-pricing-badge');
-        const badgeTitle = document.getElementById('badge-title');
-        const badgeDesc = document.getElementById('badge-desc');
-        const badgePrice = document.getElementById('badge-price');
-        const badgeStatus = document.getElementById('badge-status');
-        const badgeIcon = document.getElementById('badge-icon');
-        const submitBtn = document.getElementById('submit-order-btn');
+        const hqId = document.getElementById('form_pickup_hq').value;
 
-        if (!city) {
-            badge.style.display = 'none';
-            return;
-        }
-
-        const matchingHq = headquarters.find(hq => hq.city.toLowerCase() === city.toLowerCase() || hq.name.toLowerCase().includes(city.toLowerCase()));
-        if (!matchingHq) {
-            badge.style.display = 'none';
-            return;
-        }
-
-        // Find active delivery zones for this headquarter
-        const activeZones = deliveryZones.filter(z => z.headquarter_id == matchingHq.id);
-        let matchedZone = null;
-
-        // Check if point falls inside any custom polygon zone
-        for (const zone of activeZones) {
-            if (zone.coordinates) {
-                try {
-                    const polygonVertices = JSON.parse(zone.coordinates);
-                    if (polygonVertices && polygonVertices.length > 2) {
-                        if (isPointInPolygon([lat, lng], polygonVertices)) {
-                            matchedZone = zone;
-                            break; // First match found wins!
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error parsing coordinates for zone:', zone.name, e);
+        fetch(`/checkout/calculate-delivery?latitude=${lat}&longitude=${lng}&headquarter_id=${hqId}`)
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => { throw new Error(err.message || 'Error al calcular precio'); });
                 }
-            }
-        }
-
-        badge.style.display = 'flex';
-
-        if (matchedZone) {
-            selectedDeliveryPrice = parseFloat(matchedZone.price);
-            document.getElementById('delivery_zone_id').value = matchedZone.id;
-            isWithinCoverage = true;
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
-
-            badgeTitle.textContent = `Zona Encontrada: ${matchedZone.name}`;
-            badgeDesc.textContent = `Tu dirección se encuentra dentro de nuestra zona de reparto autorizada.`;
-            badgePrice.textContent = `S/ ${selectedDeliveryPrice.toFixed(2)}`;
-            badgePrice.className = "font-serif font-extrabold text-lg text-emerald-600";
-            badgeStatus.textContent = "Cobertura Activa";
-            badgeStatus.className = "text-[9px] text-emerald-500 font-bold uppercase tracking-wider mt-0.5";
-            badgeIcon.textContent = "🛵";
-            badge.className = "p-5 rounded-2xl border border-emerald-100 bg-emerald-50/20 flex items-center justify-between transition-all duration-300";
-        } else {
-            // Not inside any drawn custom polygon zone
-            selectedDeliveryPrice = 0;
-            document.getElementById('delivery_zone_id').value = '';
-            isWithinCoverage = false;
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.5';
-
-            badgeTitle.textContent = "FUERA DE COBERTURA";
-            badgeDesc.textContent = "Tu ubicación está fuera de nuestras zonas de reparto dibujadas. Arrastra el pin dentro del área sombreada naranja o contáctanos.";
-            badgePrice.textContent = "NO DISPONIBLE";
-            badgePrice.className = "font-serif font-bold text-xs text-red-600 uppercase";
-            badgeStatus.textContent = "Sin Cobertura";
-            badgeStatus.className = "text-[9px] text-red-500 font-bold uppercase tracking-wider mt-0.5";
-            badgeIcon.textContent = "⚠️";
-            badge.className = "p-5 rounded-2xl border border-red-100 bg-red-50/20 flex items-center justify-between transition-all duration-300";
-        }
-
-        updatePrices();
-    }
-
-    // Haversine Formula for generic calculations if needed
-    function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Earth radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
-
-    // Recalculate and update interface values
-    function updatePrices() {
-        const finalTotal = cartTotal + selectedDeliveryPrice;
-
-        // Update elements
-        document.getElementById('summary-subtotal').textContent = `S/ ${cartTotal.toFixed(2)}`;
-        
-        const deliveryEl = document.getElementById('summary-delivery');
-        if (selectedShippingType === 'delivery' && selectedDeliveryPrice > 0) {
-            deliveryEl.textContent = `S/ ${selectedDeliveryPrice.toFixed(2)}`;
-            deliveryEl.className = "text-brand-secondary font-bold";
-        } else {
-            deliveryEl.textContent = "Gratis";
-            deliveryEl.className = "text-emerald-500 font-bold uppercase text-[10px]";
-        }
-
-        document.getElementById('summary-total').textContent = `S/ ${finalTotal.toFixed(2)}`;
-    }
-
-    // Real-Time Nominatim Geocoding Autocomplete Search
-    function searchAddress(query) {
-        const city = document.getElementById('delivery-city').value;
-        const spinner = document.getElementById('search-spinner');
-        const dropdown = document.getElementById('suggestions-dropdown');
-
-        clearTimeout(autocompleteTimeout);
-        
-        if (query.trim().length < 3) {
-            dropdown.style.display = 'none';
-            return;
-        }
-
-        spinner.style.display = 'block';
-
-        autocompleteTimeout = setTimeout(() => {
-            const refinedQuery = `${query}, ${city}, Peru`;
-            
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(refinedQuery)}&limit=5&addressdetails=1`)
-                .then(res => res.json())
-                .then(data => {
-                    spinner.style.display = 'none';
-                    dropdown.innerHTML = '';
-
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            const div = document.createElement('div');
-                            div.className = 'suggestion-item';
-                            div.textContent = item.display_name;
-                            div.onclick = () => selectSuggestion(item);
-                            dropdown.appendChild(div);
-                        });
-                        dropdown.style.display = 'block';
-                    } else {
-                        dropdown.style.display = 'none';
-                    }
-                })
-                .catch(err => {
-                    spinner.style.display = 'none';
-                    console.error('Nominatim autocomplete error:', err);
-                });
-        }, 600);
-    }
-
-    function selectSuggestion(item) {
-        document.getElementById('suggestions-dropdown').style.display = 'none';
-        document.getElementById('address-search-input').value = item.display_name;
-        document.getElementById('delivery_address').value = item.display_name;
-
-        const lat = parseFloat(item.lat);
-        const lon = parseFloat(item.lon);
-        
-        map.setView([lat, lon], 16);
-        marker.setLatLng([lat, lon]);
-
-        document.getElementById('latitude').value = lat;
-        document.getElementById('longitude').value = lon;
-
-        // Recalculate price instantly using Point-in-Polygon geocerca
-        calculateAndApplyPolygonPricing(lat, lon);
-    }
-
-    // Reverse Geocoding when pinning manually
-    function reverseGeocode(lat, lon) {
-        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`)
-            .then(res => res.json())
+                return res.json();
+            })
             .then(data => {
-                if (data && data.display_name) {
-                    document.getElementById('delivery_address').value = data.display_name;
-                    document.getElementById('address-search-input').value = data.display_name;
+                if (data.success) {
+                    if (data.fuera_de_chiclayo) {
+                        selectedDeliveryPrice = 0;
+                        closeModal();
+                        setTimeout(() => openModal('modal-no-coverage'), 300);
+                        callback(false);
+                    } else {
+                        selectedDeliveryPrice = parseFloat(data.price);
+                        callback(true);
+                    }
+                } else {
+                    closeModal();
+                    setTimeout(() => openModal('modal-no-coverage'), 300);
+                    callback(false);
                 }
             })
-            .catch(err => console.error('Nominatim reverse geocode error:', err));
+            .catch(err => {
+                closeModal();
+                setTimeout(() => openModal('modal-no-coverage'), 300);
+                callback(false);
+            })
+            .finally(() => {
+                confirmBtn.disabled = false;
+                confirmBtn.innerText = originalText;
+            });
     }
 
-    // Close dropdowns if click outside
-    document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('suggestions-dropdown');
-        if (dropdown && !document.getElementById('address-search-input').contains(e.target)) {
-            dropdown.style.display = 'none';
+    // Modal Handling
+    const overlay = document.getElementById('modal-overlay');
+    
+    function openModal(modalId) {
+        currentModal = document.getElementById(modalId);
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        
+        document.querySelectorAll('.modal-box').forEach(m => m.classList.add('hidden'));
+        currentModal.classList.remove('hidden');
+        currentModal.classList.add('modal-enter');
+        
+        requestAnimationFrame(() => {
+            currentModal.classList.add('modal-enter-active');
+        });
+ 
+        if(modalId === 'modal-location' && selectedShippingType === 'delivery') {
+            initMapOnce();
         }
+    }
+ 
+    function closeModal() {
+        if(!currentModal) return;
+        currentModal.classList.remove('modal-enter-active');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+            currentModal.classList.add('hidden');
+            currentModal = null;
+        }, 200);
+    }
+ 
+    // Location Modal Logic
+    function setShippingType(type) {
+        selectedShippingType = type;
+        const btnPickup = document.getElementById('tab-pickup');
+        const btnDelivery = document.getElementById('tab-delivery');
+        
+        if (type === 'pickup') {
+            btnPickup.className = "flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-black text-white text-sm shadow-sm transition-all";
+            btnDelivery.className = "flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-white text-black text-sm shadow-sm transition-all";
+            document.getElementById('modal-pickup-content').classList.remove('hidden');
+            document.getElementById('modal-delivery-content').classList.add('hidden');
+        } else {
+            btnDelivery.className = "flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-black text-white text-sm shadow-sm transition-all";
+            btnPickup.className = "flex-1 py-2.5 text-center rounded-full font-bold border-2 border-black bg-white text-black text-sm shadow-sm transition-all";
+            document.getElementById('modal-pickup-content').classList.add('hidden');
+            document.getElementById('modal-delivery-content').classList.remove('hidden');
+            initMapOnce();
+        }
+    }
+ 
+    function saveLocationModal() {
+        document.getElementById('form_shipping_type').value = selectedShippingType;
+        if(selectedShippingType === 'pickup') {
+            const el = document.querySelector('input[name="modal_pickup_hq"]:checked');
+            if(el) {
+                document.getElementById('form_pickup_hq').value = el.value;
+                document.getElementById('main-preview-shipping-title').innerText = `Recojo en Tienda: ${el.getAttribute('data-name')}`;
+                document.getElementById('main-preview-shipping-desc').innerText = el.getAttribute('data-address');
+            }
+            selectedDeliveryPrice = 0;
+            updatePrices();
+            closeModal();
+        } else {
+            const lat = document.getElementById('form_latitude').value;
+            const lng = document.getElementById('form_longitude').value;
+            if(!lat || !lng) {
+                alert("Por favor, selecciona una ubicación en el mapa.");
+                return;
+            }
+
+            const addr = document.getElementById('address-search-input').value || 'Dirección seleccionada en mapa';
+            
+            fetchDeliveryPrice(lat, lng, function(success) {
+                if (success) {
+                    document.getElementById('form_delivery_address').value = addr;
+                    document.getElementById('main-preview-shipping-title').innerText = `Delivery`;
+                    document.getElementById('main-preview-shipping-desc').innerText = addr + ` (Envío: S/ ${selectedDeliveryPrice.toFixed(2)})`;
+                    updatePrices();
+                    closeModal();
+                }
+            });
+        }
+    }
+
+    // Phone Modal Logic
+    function savePhoneModal() {
+        const val = document.getElementById('modal-input-phone').value;
+        if(val) {
+            document.getElementById('form_phone').value = val;
+            document.getElementById('main-preview-phone').innerText = val;
+            document.getElementById('btn-phone').innerText = "Cambiar";
+        }
+        closeModal();
+    }
+
+    // Date Modal Logic
+    function saveDateModal() {
+        const date = document.getElementById('modal-input-date').value;
+        const time = document.getElementById('modal-input-time').value;
+        document.getElementById('form_date').value = date;
+        document.getElementById('form_time').value = time;
+        document.getElementById('main-preview-date').innerText = `${date} - ${time}`;
+        closeModal();
+    }
+
+    // Billing Modal Logic
+    function toggleInvoiceModalFields(type) {
+        document.getElementById('modal-fields-boleta').style.display = type === 'boleta' ? 'block' : 'none';
+        document.getElementById('modal-fields-factura').style.display = type === 'factura' ? 'block' : 'none';
+    }
+
+    function saveBillingModal() {
+        const type = document.getElementById('modal-invoice-type').value;
+        document.getElementById('form_invoice_type').value = type;
+        if(type === 'boleta') {
+            const doc = document.getElementById('modal-boleta-doc').value;
+            document.getElementById('main-preview-billing').innerText = `Boleta - Doc: ${doc || 'Pendiente'}`;
+        } else {
+            const ruc = document.getElementById('modal-factura-ruc').value;
+            document.getElementById('main-preview-billing').innerText = `Factura - RUC: ${ruc || 'Pendiente'}`;
+        }
+        closeModal();
+    }
+
+    function updatePrices() {
+        const finalTotal = cartTotal + selectedDeliveryPrice;
+        document.getElementById('summary-delivery').innerText = selectedDeliveryPrice === 0 ? 'S/ 0.00' : `S/ ${selectedDeliveryPrice.toFixed(2)}`;
+        document.getElementById('summary-total').innerText = `S/ ${finalTotal.toFixed(2)}`;
+        document.getElementById('btn-total').innerText = `S/ ${finalTotal.toFixed(2)}`;
+    }
+
+    // Extra switches
+    document.getElementById('main-toggle-torta').addEventListener('change', function() {
+        document.getElementById('main-dedicatoria-torta-box').style.display = this.checked ? 'block' : 'none';
     });
 
-    // Culqi Configuration
-    Culqi.publicKey = '{{ $culqiPublicKey }}';
-    
-    const checkoutForm = document.getElementById('checkout-form');
-    
-    checkoutForm.addEventListener('submit', function(e) {
-        if (selectedShippingType === 'delivery') {
-            const city = document.getElementById('delivery-city').value;
-            const address = document.getElementById('delivery_address').value.trim();
+    document.getElementById('main-toggle-tarjeta').addEventListener('change', function() {
+        document.getElementById('text-tarjeta').innerText = this.checked ? "El pedido se entregará con la tarjeta de dedicatoria." : "No se incluirá tarjeta física.";
+    });
 
-            if (!city || !address) {
-                e.preventDefault();
-                alert('Por favor, completa la ciudad y dirección completa en el mapa.');
-                return;
-            }
+    document.getElementById('main-toggle-gift').addEventListener('change', function() {
+        document.getElementById('text-gift').innerText = this.checked ? "El pedido se entregará sin boleta / factura (formato regalo)." : "El pedido se entregará con boleta / factura normal.";
+    });
 
-            if (!isWithinCoverage) {
-                e.preventDefault();
-                alert('La ubicación seleccionada está fuera de nuestras geocercas de cobertura express.');
-                return;
-            }
-        }
-
-        const paymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
-        
-        if (paymentMethod === 'culqi' && !document.getElementById('culqi_token').value) {
+    // Culqi logic
+    Culqi.publicKey = '{{ $culqiPublicKey ?? "pk_test_sample" }}';
+    document.getElementById('checkout-form').addEventListener('submit', function(e) {
+        const method = document.querySelector('input[name="payment_method"]:checked').value;
+        if (method === 'culqi' && !document.getElementById('culqi_token').value) {
             e.preventDefault();
-            
-            const finalTotal = cartTotal + selectedDeliveryPrice;
-            
             Culqi.settings({
                 title: 'Gourmetica',
                 currency: 'PEN',
-                description: 'Pedido Gourmetica',
-                amount: Math.round(finalTotal * 100) // Correct total charged!
+                description: 'Pedido',
+                amount: Math.round((cartTotal + selectedDeliveryPrice) * 100)
             });
-
-            Culqi.options({
-                lang: 'auto',
-                installments: false,
-                paymentMethods: {
-                    tarjeta: true,
-                    yape: true,
-                    banca_movil: true,
-                    agente: true,
-                    cuotealo: false
-                }
-            });
-
             Culqi.open();
         }
     });
 
     function culqi() {
         if (Culqi.token) {
-            const token = Culqi.token.id;
-            document.getElementById('culqi_token').value = token;
-            checkoutForm.submit();
+            document.getElementById('culqi_token').value = Culqi.token.id;
+            document.getElementById('checkout-form').submit();
         } else {
-            console.log(Culqi.error);
             alert(Culqi.error.user_message);
         }
     }
+
+    // No Coverage Modal Actions
+    function switchToPickup() {
+        closeModal();
+        setShippingType('pickup');
+        saveLocationModal();
+    }
+
+    function tryDifferentAddress() {
+        closeModal();
+        setTimeout(() => {
+            openModal('modal-location');
+        }, 300);
+    }
 </script>
 @endpush
-
-<style>
-    /* Styling adjustments for tabs */
-    #tab-pickup, #tab-delivery {
-        cursor: pointer;
-        border: none;
-        outline: none;
-    }
-</style>

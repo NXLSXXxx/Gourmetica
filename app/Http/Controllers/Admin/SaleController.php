@@ -115,11 +115,10 @@ class SaleController extends Controller
         }
     }
 
-    public function pos()
+    public function liveOrders(Request $request)
     {
         $user = auth('admin')->user();
         
-        // Scope active products by headquarter stock if needed, or simply load active products
         $products = \App\Models\Product::with(['category', 'headquarters', 'options.values'])
             ->where('is_active', true)
             ->get();
@@ -136,53 +135,41 @@ class SaleController extends Controller
             $q->where('slug', 'cliente');
         })->get();
 
-        // Find default customer
         $defaultCustomer = $customers->first();
 
-        // Fetch pending orders (precuentas) for active tables in this headquarter
-        $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : $headquarters->first()->id;
+        // Get live orders for the headquarter
+        $hqId = $request->input('hq_id');
+        if (!$hqId) {
+            $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : $headquarters->first()->id;
+        }
         
-        $pendingOrders = \App\Models\Order::with(['user', 'items.product'])
-            ->where('headquarter_id', $hqId)
-            ->where('status', 'pending')
-            ->where('payment_status', 'pending')
-            ->where('address', 'like', 'Mesa%')
-            ->get()
-            ->mapWithKeys(function($order) {
-                return [$order->address => [
-                    'order_id' => $order->id,
-                    'user_id' => $order->user_id,
-                    'customer' => $order->user,
-                    'total' => (float)$order->total,
-                    'items' => $order->items->map(function($item) {
-                        return [
-                            'product_id' => $item->product_id,
-                            'product' => $item->product,
-                            'quantity' => (int)$item->quantity,
-                            'price' => (float)$item->price,
-                            'options' => $item->options ?? null
-                        ];
-                    })
-                ]];
-            });
+        if ($request->ajax()) {
+            return response()->json($this->getLiveOrdersData($hqId));
+        }
+        
+        $liveOrdersData = $this->getLiveOrdersData($hqId);
 
-        return view('admin.sales.pos', compact('products', 'categories', 'headquarters', 'customers', 'defaultCustomer', 'pendingOrders'));
+        return view('admin.sales.live_orders', compact('products', 'categories', 'headquarters', 'customers', 'defaultCustomer', 'liveOrdersData', 'hqId'));
     }
 
-    public function posStore(Request $request)
+    public function liveOrdersStore(Request $request)
     {
+        // This is for quick purchases (compra rapida) directly at the headquarter
         $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
             'user_id' => 'required|exists:users,id',
-            'document_type' => 'required|in:01,03',
-            'table_number' => 'required|string',
+            'document_type' => 'required_unless:order_type,whatsapp|in:01,03',
             'total' => 'required|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
             'items.*.options' => 'nullable|array',
-            'order_id' => 'nullable|exists:orders,id',
+            'order_type' => 'nullable|in:salon,whatsapp',
+            'customer_name' => 'nullable|string',
+            'customer_phone' => 'nullable|string',
+            'address' => 'nullable|string',
+            'delivery_price' => 'nullable|numeric|min:0',
         ]);
 
         $user = auth('admin')->user();
@@ -190,32 +177,41 @@ class SaleController extends Controller
             return response()->json(['success' => false, 'message' => 'No tienes permiso para registrar una venta en esta sede.'], 403);
         }
 
-        // If order_id is provided, retrieve and update it, otherwise create a new one
-        if ($request->filled('order_id')) {
-            $order = \App\Models\Order::findOrFail($request->order_id);
-            $order->update([
-                'user_id' => $request->user_id,
-                'total' => $request->total,
-                'status' => 'delivered',
-                'payment_status' => 'paid',
-                'payment_method' => 'Efectivo',
-            ]);
-            // Delete old items to overwrite
-            $order->items()->delete();
-        } else {
-            // Create Order
-            $order = \App\Models\Order::create([
-                'user_id' => $request->user_id,
-                'headquarter_id' => $request->headquarter_id,
-                'total' => $request->total,
-                'status' => 'delivered',
-                'address' => $request->table_number,
-                'payment_method' => 'Efectivo',
-                'payment_status' => 'paid',
-            ]);
+        $orderType = $request->order_type ?? 'salon';
+        $userId = $request->user_id;
+
+        // Si es WhatsApp y hay datos de cliente, buscar o crear
+        $orderCustomerName = null;
+        if ($orderType === 'whatsapp' && ($request->customer_name || $request->customer_phone)) {
+            $orderCustomerName = $request->customer_name;
+            $phone = $request->customer_phone ?: 'wa_' . time() . rand(10, 99);
+            $customer = \App\Models\User::firstOrCreate(
+                ['phone' => $phone],
+                [
+                    'name' => $request->customer_name ?: 'Cliente WhatsApp',
+                    'email' => 'wa_' . time() . '@gourmetica.local',
+                    'password' => bcrypt(\Illuminate\Support\Str::random(10)),
+                    'role_id' => \App\Models\Role::where('slug', 'cliente')->first()->id ?? null
+                ]
+            );
+
+            $userId = $customer->id;
         }
 
-        // Save order items and update stock
+        // Create Order
+        $order = \App\Models\Order::create([
+            'user_id' => $userId,
+            'customer_name' => $orderCustomerName,
+            'headquarter_id' => $request->headquarter_id,
+            'total' => $request->total,
+            'status' => $orderType === 'whatsapp' ? 'pending' : 'delivered',
+            'address' => $orderType === 'whatsapp' ? ($request->address ?: 'Recojo') : 'Compra Rápida - Sede',
+            'payment_method' => $orderType === 'whatsapp' ? 'Efectivo' : 'Efectivo',
+            'payment_status' => $orderType === 'whatsapp' ? 'pending' : 'paid',
+            'delivery_price' => $orderType === 'whatsapp' ? ($request->delivery_price ?? 0) : 0,
+        ]);
+
+        // Save order items
         foreach ($request->items as $item) {
             $order->items()->create([
                 'product_id' => $item['product_id'],
@@ -223,20 +219,22 @@ class SaleController extends Controller
                 'price' => $item['price'],
                 'options' => $item['options'] ?? null,
             ]);
-
-            // Decrement stock
-            $product = \App\Models\Product::find($item['product_id']);
-            if ($product) {
-                $hqRelation = $product->headquarters()->where('headquarter_id', $request->headquarter_id)->first();
-                if ($hqRelation) {
-                    $currentStock = $hqRelation->pivot->stock;
-                    $newStock = max(0, $currentStock - intval($item['quantity']));
-                    $product->headquarters()->updateExistingPivot($request->headquarter_id, ['stock' => $newStock]);
-                }
-            }
+        }
+        
+        // Use the model method to decrement stock to keep idempotence
+        if ($orderType === 'salon') {
+            $order->decrementProductStock();
         }
 
-        // Create Sale
+        if ($orderType === 'whatsapp') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Pedido de WhatsApp registrado en cocina.',
+                'live_orders' => $this->getLiveOrdersData($request->headquarter_id),
+            ]);
+        }
+
+        // Create Sale ONLY for Salon orders immediately
         $documentType = $request->document_type;
         $series = $documentType === '01' ? 'F001' : 'B001';
 
@@ -248,7 +246,7 @@ class SaleController extends Controller
         $correlative = $lastSale ? $lastSale->correlative + 1 : 500;
 
         $sale = Sale::create([
-            'user_id' => $request->user_id,
+            'user_id' => $userId,
             'headquarter_id' => $request->headquarter_id,
             'document_type' => $documentType,
             'series' => $series,
@@ -257,7 +255,7 @@ class SaleController extends Controller
             'status' => 'completed',
             'sunat_status' => 'pending',
             'order_id' => $order->id,
-            'table_number' => $request->table_number,
+            'table_number' => null, // No more tables
         ]);
 
         // Auto declare to SUNAT via SOAP
@@ -284,83 +282,63 @@ class SaleController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Venta física registrada y declarada exitosamente.',
+            'message' => 'Compra rápida registrada exitosamente.',
             'sale_id' => $sale->id,
             'ticket_url' => route('admin.orders.ticket', $order->id),
-            'sunat_status' => $sale->sunat_status,
-            'sunat_response' => $sale->sunat_response,
-            'pending_orders' => $this->getPendingOrdersMap($request->headquarter_id),
+            'live_orders' => $this->getLiveOrdersData($request->headquarter_id),
         ]);
     }
 
-    public function posPreOrder(Request $request)
+    public function liveOrdersUpdateStatus(Request $request)
     {
         $request->validate([
-            'headquarter_id' => 'required|exists:headquarters,id',
-            'user_id' => 'required|exists:users,id',
-            'table_number' => 'required|string',
-            'total' => 'required|numeric|min:0',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.price' => 'required|numeric|min:0',
-            'items.*.options' => 'nullable|array',
+            'order_id' => 'required|exists:orders,id',
+            'status' => 'required|in:pending,preparing,shipped,delivered,cancelled',
         ]);
 
+        $order = \App\Models\Order::findOrFail($request->order_id);
         $user = auth('admin')->user();
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== (int)$request->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso para gestionar esta sede.'], 403);
+        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
+            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
         }
 
-        // Look for an existing pending order for this table
-        $order = \App\Models\Order::where('headquarter_id', $request->headquarter_id)
-            ->where('address', $request->table_number)
-            ->where('status', 'pending')
-            ->where('payment_status', 'pending')
-            ->first();
+        $isDelivery = $order->delivery_zone_id || $order->delivery_price > 0;
+        // Removido temporalmente el bloqueo estricto para permitir Forzar Entrega Manual en caso de fallos de Webhook locales.
 
-        if ($order) {
-            // Update existing order
-            $order->update([
-                'user_id' => $request->user_id,
-                'total' => $request->total,
-            ]);
-            // Delete old items
-            $order->items()->delete();
-        } else {
-            // Create new pending order
-            $order = \App\Models\Order::create([
-                'user_id' => $request->user_id,
-                'headquarter_id' => $request->headquarter_id,
-                'total' => $request->total,
-                'status' => 'pending',
-                'address' => $request->table_number,
-                'payment_method' => null,
-                'payment_status' => 'pending',
-            ]);
+        $updateData = ['status' => $request->status];
+        if ($request->status === 'delivered') {
+            $updateData['payment_status'] = 'paid';
+        }
+        
+        $order->update($updateData);
+
+        if (in_array($request->status, ['preparing', 'shipped', 'delivered'])) {
+            $order->decrementProductStock();
         }
 
-        // Save new items
-        foreach ($request->items as $item) {
-            $order->items()->create([
-                'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'options' => $item['options'] ?? null,
-            ]);
+        // Nakama Delivery Integration triggers
+        if ($request->status === 'preparing' && ($order->delivery_zone_id || $order->delivery_price > 0) && empty($order->nakama_id)) {
+            \App\Services\NakamaService::crearPedido($order);
+        } elseif ($request->status === 'shipped' && !empty($order->nakama_id)) {
+            \App\Services\NakamaService::marcarPreparado($order);
         }
 
-        // Return updated pending orders map
-        $pendingOrders = $this->getPendingOrdersMap($request->headquarter_id);
+        if ($request->status === 'delivered') {
+            // Avoid creating a sale twice if already created (e.g. from quick purchase)
+            $existingSale = Sale::where('order_id', $order->id)->first();
+            if (!$existingSale) {
+                Sale::createFromOrder($order);
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Precuenta guardada con éxito.',
-            'pending_orders' => $pendingOrders
+            'message' => 'Estado actualizado.',
+            'live_orders' => $this->getLiveOrdersData($order->headquarter_id)
         ]);
     }
 
-    public function posCancelOrder(Request $request)
+    public function liveOrdersCancel(Request $request)
     {
         $request->validate([
             'order_id' => 'required|exists:orders,id',
@@ -369,48 +347,59 @@ class SaleController extends Controller
         $order = \App\Models\Order::findOrFail($request->order_id);
         $user = auth('admin')->user();
         if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso para gestionar esta sede.'], 403);
+            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
         }
 
         $hqId = $order->headquarter_id;
-
-        // Delete items and the order
-        $order->items()->delete();
-        $order->delete();
-
-        $pendingOrders = $this->getPendingOrdersMap($hqId);
+        
+        $order->update(['status' => 'cancelled']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Mesa liberada y precuenta cancelada.',
-            'pending_orders' => $pendingOrders
+            'message' => 'Pedido cancelado.',
+            'live_orders' => $this->getLiveOrdersData($hqId)
         ]);
     }
 
-    private function getPendingOrdersMap($hqId)
+    private function getLiveOrdersData($hqId)
     {
-        return \App\Models\Order::with(['user', 'items.product'])
+        $orders = \App\Models\Order::with(['user', 'items.product'])
             ->where('headquarter_id', $hqId)
-            ->where('status', 'pending')
-            ->where('payment_status', 'pending')
-            ->where('address', 'like', 'Mesa%')
-            ->get()
-            ->mapWithKeys(function($order) {
-                return [$order->address => [
-                    'order_id' => $order->id,
-                    'user_id' => $order->user_id,
-                    'customer' => $order->user,
-                    'total' => (float)$order->total,
-                    'items' => $order->items->map(function($item) {
-                        return [
-                            'product_id' => $item->product_id,
-                            'product' => $item->product,
-                            'quantity' => (int)$item->quantity,
-                            'price' => (float)$item->price,
-                            'options' => $item->options ?? null
-                        ];
-                    })
-                ]];
-            });
+            ->whereIn('status', ['pending', 'preparing', 'shipped', 'delivered'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $data = [
+            'pending' => [],
+            'preparing' => [],
+            'shipped' => [],
+            'delivered' => [],
+        ];
+
+        foreach ($orders as $order) {
+
+            $orderData = [
+                'order_id' => $order->id,
+                'customer_name' => $order->customer_name ?: ($order->user->name ?? 'Cliente Anónimo'),
+                'total' => (float)$order->total,
+                'status' => $order->status,
+                'payment_status' => $order->payment_status,
+                'address' => $order->address,
+                'is_delivery' => $order->delivery_zone_id || $order->delivery_price > 0,
+                'created_at' => $order->created_at->format('H:i'),
+                'time_ago' => $order->created_at->diffForHumans(),
+                'items' => $order->items->map(function($item) {
+                    return [
+                        'product_name' => $item->product->name ?? 'Producto',
+                        'quantity' => (int)$item->quantity,
+                        'options' => $item->options ?? null
+                    ];
+                })->toArray()
+            ];
+
+            $data[$order->status][] = $orderData;
+        }
+
+        return $data;
     }
 }

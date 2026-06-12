@@ -117,11 +117,28 @@
                 </div>
             </div>
 
+            <!-- Receta del Producto (Descuento de Insumos) -->
+            <div class="bg-[#1E293B] p-8 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                <h2 class="text-xl font-bold flex items-center">
+                    <span class="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary flex items-center justify-center mr-3 text-sm">3</span>
+                    Receta del Producto (Descuento de Insumos)
+                </h2>
+                <p class="text-xs text-slate-400 -mt-2">Define los insumos necesarios para preparar una unidad de este producto. Al registrar una producción de este producto, estos insumos se descontarán automáticamente del almacén de la sede.</p>
+
+                <div id="recipe-container" class="space-y-4">
+                    <!-- Recipe rows will be appended here -->
+                </div>
+
+                <button type="button" onclick="addRecipeRow()" class="mt-4 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs hover:bg-slate-700 hover:text-white transition-colors">
+                    + ASOCIAR INSUMO / INGREDIENTE
+                </button>
+            </div>
+
             <!-- Opciones y Adicionales (Toppings, Tamaños, etc.) -->
             <div class="bg-[#1E293B] p-8 rounded-2xl border border-slate-700 shadow-xl space-y-6">
                 <div class="flex justify-between items-center">
                     <h2 class="text-xl font-bold flex items-center text-brand-primary">
-                        <span class="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary flex items-center justify-center mr-3 text-sm">3</span>
+                        <span class="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary flex items-center justify-center mr-3 text-sm">4</span>
                         Opciones y Adicionales (Toppings, Tamaños, etc.)
                     </h2>
                 </div>
@@ -291,5 +308,75 @@
             });
         }
     }
+
+    let recipeIndex = 0;
+    const suppliesJson = @json($supplies);
+
+    function addRecipeRow(supplyId = '', quantity = '') {
+        const container = document.getElementById('recipe-container');
+        if (suppliesJson.length === 0) {
+            Swal.fire({
+                title: 'Atención',
+                text: 'Registra insumos en la sección de Insumos antes de configurar una receta.',
+                icon: 'warning',
+                confirmButtonColor: '#E2B182',
+                background: '#1E293B',
+                color: '#F8FAFC'
+            });
+            return;
+        }
+
+        let selectOptions = '';
+        suppliesJson.forEach(supply => {
+            const selected = supply.id == supplyId ? 'selected' : '';
+            selectOptions += `<option value="${supply.id}" ${selected} data-unit="${supply.unit}">${supply.name} (${supply.unit})</option>`;
+        });
+
+        const html = `
+            <div class="recipe-row flex items-center gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50" data-index="${recipeIndex}">
+                <div class="flex-1">
+                    <label class="block text-[10px] text-slate-500 uppercase mb-1">Insumo / Ingrediente</label>
+                    <select name="recipe[${recipeIndex}][supply_id]" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" onchange="updateRowUnit(this)">
+                        ${selectOptions}
+                    </select>
+                </div>
+                <div class="w-48">
+                    <label class="block text-[10px] text-slate-500 uppercase mb-1">Cantidad Requerida (por unidad)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" step="0.0001" name="recipe[${recipeIndex}][quantity]" value="${quantity}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none text-right" placeholder="0.0000">
+                        <span class="text-xs text-slate-400 font-mono font-bold w-12 unit-label"></span>
+                    </div>
+                </div>
+                <button type="button" onclick="this.closest('.recipe-row').remove()" class="mt-5 text-slate-400 hover:text-red-400 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        
+        const newRow = container.querySelector(`[data-index="${recipeIndex}"]`);
+        const newSelect = newRow.querySelector('select');
+        if (newSelect) {
+            updateRowUnit(newSelect);
+        }
+
+        recipeIndex++;
+    }
+
+    function updateRowUnit(selectEl) {
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        const unit = selectedOption ? selectedOption.getAttribute('data-unit') : '';
+        const row = selectEl.closest('.recipe-row');
+        row.querySelector('.unit-label').innerText = unit;
+    }
+
+    // Load existing recipe rows
+    document.addEventListener('DOMContentLoaded', function() {
+        @foreach($product->recipes as $recipe)
+            addRecipeRow("{{ $recipe->supply_id }}", "{{ $recipe->quantity }}");
+        @endforeach
+    });
 </script>
 @endsection

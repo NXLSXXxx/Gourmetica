@@ -125,6 +125,33 @@
             </div>
             <p class="mt-4 text-xs text-slate-500 italic">Puedes obtener estas llaves en el panel de Culqi (Sección Desarrollo > Llaves).</p>
         </div>
+
+        <!-- Nakama Delivery Settings -->
+        <div class="bg-brand-primary p-8 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden">
+            <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3 text-brand-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Integración de Delivery (Nakama Delivery)
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">URL Base de la API</label>
+                    <input type="text" name="nakama_api_url" value="{{ $settings['nakama_api_url'] }}" placeholder="https://nakama.pe" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white font-mono focus:border-brand-primary outline-none transition-all">
+                    <p class="text-xs text-slate-500 mt-1">Ej: https://nakama.pe (sin barra diagonal al final).</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">API Key de Integración</label>
+                    <input type="password" name="nakama_api_key" value="{{ $settings['nakama_api_key'] }}" placeholder="nk_..." class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all">
+                </div>
+                <div class="col-span-2 flex items-center mt-2">
+                    <input type="checkbox" id="nakama_enabled" name="nakama_enabled" value="1" {{ $settings['nakama_enabled'] == '1' ? 'checked' : '' }} class="w-4 h-4 text-brand-secondary bg-slate-800 border-slate-600 rounded focus:ring-brand-primary focus:ring-2">
+                    <label for="nakama_enabled" class="ml-3 text-sm font-medium text-slate-300 cursor-pointer">Activar envío automático de pedidos a Nakama Delivery al confirmar</label>
+                </div>
+            </div>
+            <p class="mt-4 text-xs text-slate-500 italic">Esta integración enviará automáticamente las órdenes de delivery express a la flota de Nakama cuando el estado cambie a "Preparando".</p>
+        </div>
         @endif
 
         <div class="flex justify-end">

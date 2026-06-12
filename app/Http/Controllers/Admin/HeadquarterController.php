@@ -43,6 +43,8 @@ class HeadquarterController extends Controller
             'city' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
         ]);
 
         Headquarter::create($request->all());
@@ -64,6 +66,8 @@ class HeadquarterController extends Controller
             'city' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
         ]);
 
         $headquarters->update($request->all());

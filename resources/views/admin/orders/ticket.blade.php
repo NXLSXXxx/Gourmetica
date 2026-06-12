@@ -63,7 +63,7 @@
     <div class="info border-b">
         <p><span class="font-bold">PEDIDO:</span> #{{ str_pad($order->id, 6, '0', STR_PAD_LEFT) }}</p>
         <p><span class="font-bold">FECHA:</span> {{ $order->created_at->format('d/m/Y H:i') }}</p>
-        <p><span class="font-bold">CLIENTE:</span> {{ strtoupper($order->user->name) }}</p>
+        <p><span class="font-bold">CLIENTE:</span> {{ strtoupper($order->customer_name ?: ($order->user->name ?? 'CLIENTE ANÓNIMO')) }}</p>
         @if($order->payment_method)
         <p><span class="font-bold">PAGO:</span> {{ strtoupper($order->payment_method) }}</p>
         @endif

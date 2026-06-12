@@ -32,7 +32,7 @@
 
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="{{ route('shop.index') }}" class="btn-premium px-10 py-4">VOLVER A LA TIENDA</a>
-            <a href="#" class="px-10 py-4 font-bold text-brand-primary border-2 border-gray-200 rounded-2xl hover:bg-white transition-all">VER MIS PEDIDOS</a>
+            <a href="{{ route('shop.tracking', $order->id) }}" class="px-10 py-4 font-bold text-brand-primary border-2 border-gray-200 rounded-2xl hover:bg-white transition-all text-center">SEGUIR MI PEDIDO</a>
         </div>
     </div>
 </div>

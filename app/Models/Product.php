@@ -46,6 +46,18 @@ class Product extends Model
         return $this->hasMany(ProductOption::class);
     }
 
+    public function recipes()
+    {
+        return $this->hasMany(Recipe::class);
+    }
+
+    public function supplies()
+    {
+        return $this->belongsToMany(Supply::class, 'recipes')
+                    ->withPivot('quantity')
+                    ->withTimestamps();
+    }
+
     public function favoritedBy()
     {
         return $this->belongsToMany(User::class, 'favorites')->withTimestamps();

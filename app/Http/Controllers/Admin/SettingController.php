@@ -26,6 +26,9 @@ class SettingController extends Controller
             'contact_whatsapp' => Setting::get('contact_whatsapp', '950664655'),
             'contact_email' => Setting::get('contact_email', 'hola@gourmetica.pe'),
             'contact_phone' => Setting::get('contact_phone', '(01) 234-5678'),
+            'nakama_api_url' => Setting::get('nakama_api_url', 'http://localhost/public'),
+            'nakama_api_key' => Setting::get('nakama_api_key', ''),
+            'nakama_enabled' => Setting::get('nakama_enabled', '0'),
         ];
 
         return view('admin.settings.index', compact('settings'));
@@ -51,10 +54,23 @@ class SettingController extends Controller
         } else {
             // Engineer can update everything
             $requestData = $request->except(['_token', 'sunat_certificate']);
+            // Handle checkbox for nakama_enabled explicitly
+            $requestData['nakama_enabled'] = $request->has('nakama_enabled') ? '1' : '0';
         }
 
         foreach ($requestData as $key => $value) {
-            Setting::set($key, $value, str_contains($key, 'sunat') ? 'sunat' : 'company');
+            $group = 'general';
+            if (str_contains($key, 'sunat')) {
+                $group = 'sunat';
+            } elseif (str_contains($key, 'culqi')) {
+                $group = 'culqi';
+            } elseif (str_contains($key, 'nakama')) {
+                $group = 'nakama';
+            } else {
+                $group = 'company';
+            }
+
+            Setting::set($key, $value, $group);
         }
 
         if (auth('admin')->user()->isIngeniero() && $request->hasFile('sunat_certificate')) {

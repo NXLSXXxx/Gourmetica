@@ -48,6 +48,17 @@ class OrderController extends Controller
         
         $order->update($updateData);
 
+        if (in_array($request->status, ['preparing', 'shipped', 'delivered'])) {
+            $order->decrementProductStock();
+        }
+
+        // Nakama Delivery Integration triggers
+        if ($request->status === 'preparing' && $order->delivery_zone_id && empty($order->nakama_id)) {
+            \App\Services\NakamaService::crearPedido($order);
+        } elseif ($request->status === 'shipped' && !empty($order->nakama_id)) {
+            \App\Services\NakamaService::marcarPreparado($order);
+        }
+
         if ($request->status === 'delivered') {
             \App\Models\Sale::createFromOrder($order);
         }

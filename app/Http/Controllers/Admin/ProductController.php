@@ -17,7 +17,8 @@ class ProductController extends Controller
     {
         $categories = \App\Models\Category::all();
         $headquarters = \App\Models\Headquarter::all();
-        return view('admin.products.create', compact('categories', 'headquarters'));
+        $supplies = \App\Models\Supply::all();
+        return view('admin.products.create', compact('categories', 'headquarters', 'supplies'));
     }
 
     public function store(Request $request)
@@ -36,6 +37,9 @@ class ProductController extends Controller
             'options.*.values' => 'required_with:options|array',
             'options.*.values.*.value' => 'required|string|max:255',
             'options.*.values.*.price' => 'required|numeric|min:0',
+            'recipe' => 'nullable|array',
+            'recipe.*.supply_id' => 'required_with:recipe|exists:supplies,id',
+            'recipe.*.quantity' => 'required_with:recipe|numeric|min:0.0001',
         ]);
 
         $imagePath = null;
@@ -82,6 +86,16 @@ class ProductController extends Controller
                 }
             }
         }
+        
+        if ($request->has('recipe') && is_array($request->recipe)) {
+            foreach ($request->recipe as $item) {
+                if (empty($item['supply_id']) || empty($item['quantity'])) continue;
+                $product->recipes()->create([
+                    'supply_id' => $item['supply_id'],
+                    'quantity' => $item['quantity'],
+                ]);
+            }
+        }
 
         return redirect()->route('admin.products.index')->with('success', 'Producto creado exitosamente.');
     }
@@ -90,8 +104,9 @@ class ProductController extends Controller
     {
         $categories = \App\Models\Category::all();
         $headquarters = \App\Models\Headquarter::all();
-        $product->load(['headquarters', 'options.values']);
-        return view('admin.products.edit', compact('product', 'categories', 'headquarters'));
+        $supplies = \App\Models\Supply::all();
+        $product->load(['headquarters', 'options.values', 'recipes.supply']);
+        return view('admin.products.edit', compact('product', 'categories', 'headquarters', 'supplies'));
     }
 
     public function update(Request $request, \App\Models\Product $product)
@@ -111,6 +126,9 @@ class ProductController extends Controller
             'options.*.values' => 'required_with:options|array',
             'options.*.values.*.value' => 'required|string|max:255',
             'options.*.values.*.price' => 'required|numeric|min:0',
+            'recipe' => 'nullable|array',
+            'recipe.*.supply_id' => 'required_with:recipe|exists:supplies,id',
+            'recipe.*.quantity' => 'required_with:recipe|numeric|min:0.0001',
         ]);
 
         if ($request->hasFile('image')) {
@@ -163,6 +181,19 @@ class ProductController extends Controller
             }
         } else {
             $product->options()->delete();
+        }
+
+        if ($request->has('recipe') && is_array($request->recipe)) {
+            $product->recipes()->delete();
+            foreach ($request->recipe as $item) {
+                if (empty($item['supply_id']) || empty($item['quantity'])) continue;
+                $product->recipes()->create([
+                    'supply_id' => $item['supply_id'],
+                    'quantity' => $item['quantity'],
+                ]);
+            }
+        } else {
+            $product->recipes()->delete();
         }
 
         return redirect()->route('admin.products.index')->with('success', 'Producto actualizado exitosamente.');

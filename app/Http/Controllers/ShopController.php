@@ -51,4 +51,9 @@ class ShopController extends Controller
     {
         return response()->json($category->products()->where('is_active', true)->take(6)->get());
     }
+
+    public function tracking(\App\Models\Order $order)
+    {
+        return view('shop.tracking', compact('order'));
+    }
 }

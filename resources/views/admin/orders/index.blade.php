@@ -29,7 +29,7 @@
                                 <span class="text-xs text-slate-500">{{ $order->created_at->format('d/m/Y H:i') }}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="text-slate-300 block">{{ $order->user->name }}</span>
+                                <span class="text-slate-300 block">{{ $order->customer_name ?: ($order->user->name ?? 'Cliente Anónimo') }}</span>
                                 <span class="text-xs text-slate-500">{{ $order->address }}</span>
                             </td>
                             <td class="px-6 py-4">

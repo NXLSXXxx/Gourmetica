@@ -134,7 +134,7 @@
                 <div class="border-t border-slate-700/60 pt-4 space-y-3 text-sm">
                     <div>
                         <span class="text-xs text-slate-500 block">Nombre</span>
-                        <span class="text-white font-semibold">{{ $order->user->name }}</span>
+                        <span class="text-white font-semibold">{{ $order->customer_name ?: ($order->user->name ?? 'Cliente Anónimo') }}</span>
                     </div>
                     <div>
                         <span class="text-xs text-slate-500 block">Correo electrónico</span>
