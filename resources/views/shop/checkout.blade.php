@@ -641,7 +641,7 @@
                             marker.position = pos;
                         }
                     } else {
-                        alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo o mueve el marcador manualmente.");
+                        alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo.");
                     }
                 });
             }
