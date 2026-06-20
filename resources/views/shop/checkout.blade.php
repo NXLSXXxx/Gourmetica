@@ -600,25 +600,50 @@
             
             try {
                 await place.fetchFields({ fields: ['location', 'formattedAddress'] });
-                if (!place.location) return;
+                if (place.location) {
+                    const lat = place.location.lat();
+                    const lng = place.location.lng();
+                    const address = place.formattedAddress || autocomplete.value || autocomplete.inputValue || 'Dirección seleccionada';
 
-                const lat = place.location.lat();
-                const lng = place.location.lng();
-                const address = place.formattedAddress || autocomplete.inputValue;
+                    document.getElementById('form_latitude').value = lat;
+                    document.getElementById('form_longitude').value = lng;
+                    document.getElementById('modal-address-preview').innerText = address;
 
-                document.getElementById('form_latitude').value = lat;
-                document.getElementById('form_longitude').value = lng;
-                document.getElementById('modal-address-preview').innerText = address;
-
-                if (map && marker) {
-                    const pos = { lat: lat, lng: lng };
-                    map.setCenter(pos);
-                    map.setZoom(16);
-                    marker.position = pos;
+                    if (map && marker) {
+                        const pos = { lat: lat, lng: lng };
+                        map.setCenter(pos);
+                        map.setZoom(16);
+                        marker.position = pos;
+                    }
+                    return;
                 }
             } catch (error) {
-                console.error("Error fetching place details:", error);
-                alert("Hubo un error al obtener la ubicación. Por favor, intenta de nuevo o mueve el marcador en el mapa manualmente.");
+                console.warn("fetchFields failed (possibly missing Places API New), falling back to Geocoder...", error);
+            }
+            
+            // Fallback using Geocoder if fetchFields is restricted or fails
+            if (geocoder) {
+                const request = place.id ? { placeId: place.id } : { address: (autocomplete.value || autocomplete.inputValue) + ', Perú' };
+                geocoder.geocode(request, (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                        const lat = results[0].geometry.location.lat();
+                        const lng = results[0].geometry.location.lng();
+                        const address = results[0].formatted_address;
+
+                        document.getElementById('form_latitude').value = lat;
+                        document.getElementById('form_longitude').value = lng;
+                        document.getElementById('modal-address-preview').innerText = address;
+
+                        if (map && marker) {
+                            const pos = { lat: lat, lng: lng };
+                            map.setCenter(pos);
+                            map.setZoom(16);
+                            marker.position = pos;
+                        }
+                    } else {
+                        alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo o mueve el marcador manualmente.");
+                    }
+                });
             }
         });
 
@@ -857,7 +882,7 @@
             const lng = document.getElementById('form_longitude').value;
             if(!lat || !lng) {
                 const addrElement = document.getElementById('address-search-input');
-                const addrText = (addrElement && addrElement.inputValue) ? addrElement.inputValue : ((addrElement && addrElement.value) ? addrElement.value : '');
+                const addrText = (addrElement && addrElement.value) ? addrElement.value : ((addrElement && addrElement.inputValue) ? addrElement.inputValue : '');
                 
                 if (addrText.trim().length > 0) {
                     geocodeAddress(addrText);
@@ -868,7 +893,7 @@
             }
 
             const addrElement = document.getElementById('address-search-input');
-            const addr = (addrElement && addrElement.inputValue) ? addrElement.inputValue : ((addrElement && addrElement.value) ? addrElement.value : 'Dirección seleccionada en mapa');
+            const addr = (addrElement && addrElement.value) ? addrElement.value : ((addrElement && addrElement.inputValue) ? addrElement.inputValue : 'Dirección seleccionada en mapa');
             
             fetchDeliveryPrice(lat, lng, function(success) {
                 if (success) {
