@@ -566,10 +566,27 @@
         
         autocomplete.id = 'address-search-input';
         
+        // Match original styling as closely as possible
         const style = document.createElement('style');
         style.innerHTML = `
             gmp-place-autocomplete {
                 width: 100%;
+                --gmp-color-background: #f9fafb;
+                --gmp-color-surface: #ffffff;
+                --gmp-color-on-background: #111827;
+                --gmp-color-on-surface: #111827;
+                --gmp-color-primary: #E50000;
+                --gmp-radius-container: 0.75rem;
+                --gmp-border-color: #e5e7eb;
+                box-shadow: none;
+            }
+            gmp-place-autocomplete::part(container) {
+                border: 1px solid #e5e7eb;
+                border-radius: 0.75rem;
+                padding-left: 2rem;
+            }
+            gmp-place-autocomplete::part(input) {
+                font-size: 0.875rem;
             }
         `;
         document.head.appendChild(style);
@@ -578,21 +595,29 @@
 
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
             const place = event.place;
-            await place.fetchFields({ fields: ['location'] });
-            if (!place.location) return;
+            if (!place) return;
+            
+            try {
+                await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+                if (!place.location) return;
 
-            const lat = place.location.lat();
-            const lng = place.location.lng();
+                const lat = place.location.lat();
+                const lng = place.location.lng();
+                const address = place.formattedAddress || autocomplete.inputValue;
 
-            document.getElementById('form_latitude').value = lat;
-            document.getElementById('form_longitude').value = lng;
-            document.getElementById('modal-address-preview').innerText = "Lat: " + lat.toFixed(4) + ", Lng: " + lng.toFixed(4);
+                document.getElementById('form_latitude').value = lat;
+                document.getElementById('form_longitude').value = lng;
+                document.getElementById('modal-address-preview').innerText = address;
 
-            if (map && marker) {
-                const pos = { lat: lat, lng: lng };
-                map.setCenter(pos);
-                map.setZoom(16);
-                marker.position = pos;
+                if (map && marker) {
+                    const pos = { lat: lat, lng: lng };
+                    map.setCenter(pos);
+                    map.setZoom(16);
+                    marker.position = pos;
+                }
+            } catch (error) {
+                console.error("Error fetching place details:", error);
+                alert("Hubo un error al obtener la ubicación. Por favor, intenta de nuevo o mueve el marcador en el mapa manualmente.");
             }
         });
 
