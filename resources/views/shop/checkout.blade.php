@@ -594,6 +594,16 @@
 
         input.parentNode.replaceChild(autocomplete, input);
 
+        autocomplete.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const text = autocomplete.value || autocomplete.inputValue;
+                if (text && text.trim().length > 0) {
+                    geocodeAddressForPreview(text);
+                }
+            }
+        });
+
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
             const place = event.place;
             if (!place) {
@@ -616,7 +626,8 @@
                         const pos = { lat: lat, lng: lng };
                         map.setCenter(pos);
                         map.setZoom(16);
-                        marker.position = pos;
+                        if (typeof marker.setPosition === 'function') marker.setPosition(pos);
+                        else marker.position = pos;
                     }
                     saveLocationModal();
                     return;
