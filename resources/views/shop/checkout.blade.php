@@ -594,36 +594,6 @@
 
         input.parentNode.replaceChild(autocomplete, input);
 
-        // Actualizar el mapa automáticamente si el usuario escribe pero no selecciona de la lista
-        autocomplete.addEventListener('focusout', () => {
-            const text = autocomplete.value || autocomplete.inputValue;
-            if (text && text.trim().length > 0) {
-                geocodeAddressForPreview(text);
-            }
-        });
-
-        // Autocompletado en tiempo real mientras escribe (con retraso de 1 segundo para no saturar la API)
-        let typingTimer;
-        autocomplete.addEventListener('input', () => {
-            clearTimeout(typingTimer);
-            typingTimer = setTimeout(() => {
-                const text = autocomplete.value || autocomplete.inputValue;
-                if (text && text.trim().length > 3) {
-                    geocodeAddressForPreview(text);
-                }
-            }, 1000);
-        });
-
-        autocomplete.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const text = autocomplete.value || autocomplete.inputValue;
-                if (text && text.trim().length > 0) {
-                    geocodeAddressForPreview(text);
-                }
-            }
-        });
-
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
             const place = event.place;
             if (!place) {
@@ -648,6 +618,7 @@
                         map.setZoom(16);
                         marker.position = pos;
                     }
+                    saveLocationModal();
                     return;
                 }
             } catch (error) {
@@ -675,6 +646,7 @@
                             map.setZoom(16);
                             marker.position = pos;
                         }
+                        saveLocationModal();
                     } else {
                         alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo.");
                     }
