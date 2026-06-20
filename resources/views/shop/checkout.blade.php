@@ -594,6 +594,24 @@
 
         input.parentNode.replaceChild(autocomplete, input);
 
+        // Actualizar el mapa automáticamente si el usuario escribe pero no selecciona de la lista
+        autocomplete.addEventListener('focusout', () => {
+            const text = autocomplete.value || autocomplete.inputValue;
+            if (text && text.trim().length > 0) {
+                geocodeAddressForPreview(text);
+            }
+        });
+
+        autocomplete.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const text = autocomplete.value || autocomplete.inputValue;
+                if (text && text.trim().length > 0) {
+                    geocodeAddressForPreview(text);
+                }
+            }
+        });
+
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
             console.log("1. gmp-placeselect disparado", event);
             const place = event.place;
@@ -665,6 +683,29 @@
 
         geocoder = new google.maps.Geocoder();
         console.log("0. Google Maps inicializado correctamente.");
+    }
+
+    // Geocode solo para previsualizar el punto en el mapa (cuando el usuario escribe y hace clic afuera)
+    function geocodeAddressForPreview(address) {
+        if (!geocoder) return;
+        geocoder.geocode({ address: address + ', Chiclayo, Perú' }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const lat = typeof results[0].geometry.location.lat === 'function' ? results[0].geometry.location.lat() : results[0].geometry.location.lat;
+                const lng = typeof results[0].geometry.location.lng === 'function' ? results[0].geometry.location.lng() : results[0].geometry.location.lng;
+                
+                document.getElementById('form_latitude').value = lat;
+                document.getElementById('form_longitude').value = lng;
+                document.getElementById('modal-address-preview').innerText = results[0].formatted_address;
+                
+                if (map && marker) {
+                    const pos = { lat: lat, lng: lng };
+                    map.setCenter(pos);
+                    map.setZoom(16);
+                    if (typeof marker.setPosition === 'function') marker.setPosition(pos);
+                    else marker.position = pos;
+                }
+            }
+        });
     }
 
     // Initialize Map explicitly inside modal when opened
