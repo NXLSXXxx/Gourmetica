@@ -736,26 +736,33 @@
             confirmBtn.disabled = false;
             confirmBtn.innerText = originalText;
             
-            if (status === 'OK' && results[0]) {
-                const lat = results[0].geometry.location.lat();
-                const lng = results[0].geometry.location.lng();
-                
-                document.getElementById('form_latitude').value = lat;
-                document.getElementById('form_longitude').value = lng;
-                document.getElementById('modal-address-preview').innerText = results[0].formatted_address;
-                
-                if (map && marker) {
-                    const pos = { lat: lat, lng: lng };
-                    map.setCenter(pos);
-                    map.setZoom(16);
-                    marker.position = pos;
+            try {
+                if (status === 'OK' && results[0]) {
+                    const lat = typeof results[0].geometry.location.lat === 'function' ? results[0].geometry.location.lat() : results[0].geometry.location.lat;
+                    const lng = typeof results[0].geometry.location.lng === 'function' ? results[0].geometry.location.lng() : results[0].geometry.location.lng;
+                    
+                    document.getElementById('form_latitude').value = lat;
+                    document.getElementById('form_longitude').value = lng;
+                    document.getElementById('modal-address-preview').innerText = results[0].formatted_address;
+                    
+                    if (map && marker) {
+                        const pos = { lat: lat, lng: lng };
+                        map.setCenter(pos);
+                        map.setZoom(16);
+                        if (typeof marker.setPosition === 'function') marker.setPosition(pos);
+                        else marker.position = pos;
+                    }
+                    
+                    console.log("C. Todo parseado bien. Ejecutando saveLocationModal con lat/lng:", lat, lng);
+                    // Llama de nuevo a saveLocationModal, ahora que lat y lng existen.
+                    saveLocationModal();
+                } else {
+                    console.error("C. Geocoder manual falló. Status:", status);
+                    alert("No pudimos encontrar la dirección exacta. Por favor, selecciona una opción de la lista o mueve el marcador en el mapa.");
                 }
-                
-                // Retry saving
-                saveLocationModal();
-            } else {
-                console.error("C. Geocoder manual falló. Status:", status);
-                alert("No pudimos encontrar la dirección exacta. Por favor, selecciona una opción de la lista o mueve el marcador en el mapa.");
+            } catch (error) {
+                console.error("D. Error crítico procesando la respuesta del Geocoder:", error);
+                alert("Ocurrió un error al procesar tu dirección.");
             }
         });
     }
