@@ -502,7 +502,7 @@
                         @forelse(session('cart', []) as $item)
                             <div class="flex gap-4 items-center">
                                 <div class="w-16 h-16 bg-white rounded-lg flex-shrink-0 border border-gray-200 overflow-hidden">
-                                    <img src="{{ $item['image_url'] ?? 'https://via.placeholder.com/150' }}" alt="Img" class="w-full h-full object-cover">
+                                    <img src="{{ $item['image_url'] ?? 'https://placehold.co/150x150' }}" alt="Img" class="w-full h-full object-cover">
                                 </div>
                                 <div class="flex-1">
                                     <div class="flex justify-between items-start">
