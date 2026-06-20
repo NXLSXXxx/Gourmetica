@@ -571,6 +571,7 @@
         style.innerHTML = `
             gmp-place-autocomplete {
                 width: 100%;
+                color-scheme: light;
                 --gmp-color-background: #f9fafb;
                 --gmp-color-surface: #ffffff;
                 --gmp-color-on-background: #111827;
@@ -670,6 +671,42 @@
                     if('inputValue' in input) input.inputValue = addr;
                     else input.value = addr;
                 }
+            }
+        });
+    }
+
+    // Geocode manual address search
+    function geocodeAddress(address) {
+        if (!geocoder) return;
+        
+        const confirmBtn = document.querySelector('#modal-location button[onclick="saveLocationModal()"]');
+        const originalText = confirmBtn.innerText;
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = "Buscando dirección...";
+
+        geocoder.geocode({ address: address + ', Chiclayo, Perú' }, (results, status) => {
+            confirmBtn.disabled = false;
+            confirmBtn.innerText = originalText;
+            
+            if (status === 'OK' && results[0]) {
+                const lat = results[0].geometry.location.lat();
+                const lng = results[0].geometry.location.lng();
+                
+                document.getElementById('form_latitude').value = lat;
+                document.getElementById('form_longitude').value = lng;
+                document.getElementById('modal-address-preview').innerText = results[0].formatted_address;
+                
+                if (map && marker) {
+                    const pos = { lat: lat, lng: lng };
+                    map.setCenter(pos);
+                    map.setZoom(16);
+                    marker.position = pos;
+                }
+                
+                // Retry saving
+                saveLocationModal();
+            } else {
+                alert("No pudimos encontrar la dirección exacta. Por favor, selecciona una opción de la lista o mueve el marcador en el mapa.");
             }
         });
     }
@@ -819,7 +856,14 @@
             const lat = document.getElementById('form_latitude').value;
             const lng = document.getElementById('form_longitude').value;
             if(!lat || !lng) {
-                alert("Por favor, selecciona una ubicación en el mapa.");
+                const addrElement = document.getElementById('address-search-input');
+                const addrText = (addrElement && addrElement.inputValue) ? addrElement.inputValue : ((addrElement && addrElement.value) ? addrElement.value : '');
+                
+                if (addrText.trim().length > 0) {
+                    geocodeAddress(addrText);
+                } else {
+                    alert("Por favor, selecciona una ubicación en el mapa.");
+                }
                 return;
             }
 
