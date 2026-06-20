@@ -817,17 +817,21 @@
                 return res.json();
             })
             .then(data => {
+                console.log("F. Respuesta de fetchDeliveryPrice parseada:", data);
                 if (data.success) {
                     if (data.fuera_de_chiclayo) {
+                        console.warn("G. El backend reporta que la ubicación está fuera de chiclayo (o fuera de la cobertura).");
                         selectedDeliveryPrice = 0;
                         closeModal();
                         setTimeout(() => openModal('modal-no-coverage'), 300);
                         callback(false);
                     } else {
+                        console.log("G. Cobertura aceptada. Precio:", data.price);
                         selectedDeliveryPrice = parseFloat(data.price);
                         callback(true);
                     }
                 } else {
+                    console.error("H. El backend devolvió success: false. Mensaje:", data.message);
                     closeModal();
                     setTimeout(() => openModal('modal-no-coverage'), 300);
                     callback(false);
