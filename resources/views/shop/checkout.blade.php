@@ -595,11 +595,18 @@
         input.parentNode.replaceChild(autocomplete, input);
 
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
+            console.log("1. gmp-placeselect disparado", event);
             const place = event.place;
-            if (!place) return;
+            if (!place) {
+                console.error("2. Error: event.place es undefined o nulo");
+                return;
+            }
             
             try {
+                console.log("3. Intentando fetchFields para el lugar:", place.id);
                 await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+                console.log("4. fetchFields exitoso. Datos:", place);
+                
                 if (place.location) {
                     const lat = place.location.lat();
                     const lng = place.location.lng();
@@ -616,15 +623,21 @@
                         marker.position = pos;
                     }
                     return;
+                } else {
+                    console.error("5. fetchFields funcionó pero place.location está vacío.");
                 }
             } catch (error) {
-                console.warn("fetchFields failed (possibly missing Places API New), falling back to Geocoder...", error);
+                console.error("X. Error crítico en fetchFields (Probablemente falte habilitar 'Places API (New)' en Google Cloud):", error);
             }
             
             // Fallback using Geocoder if fetchFields is restricted or fails
             if (geocoder) {
                 const request = place.id ? { placeId: place.id } : { address: (autocomplete.value || autocomplete.inputValue) + ', Perú' };
+                console.log("6. Ejecutando Geocoder de respaldo con request:", request);
+                
                 geocoder.geocode(request, (results, status) => {
+                    console.log("7. Respuesta de Geocoder de respaldo:", status, results);
+                    
                     if (status === 'OK' && results[0]) {
                         const lat = results[0].geometry.location.lat();
                         const lng = results[0].geometry.location.lng();
@@ -641,13 +654,17 @@
                             marker.position = pos;
                         }
                     } else {
+                        console.error("8. Geocoder falló. Status:", status);
                         alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo.");
                     }
                 });
+            } else {
+                console.error("9. Geocoder de respaldo falló porque geocoder no está inicializado.");
             }
         });
 
         geocoder = new google.maps.Geocoder();
+        console.log("0. Google Maps inicializado correctamente.");
     }
 
     // Initialize Map explicitly inside modal when opened
@@ -702,14 +719,20 @@
 
     // Geocode manual address search
     function geocodeAddress(address) {
-        if (!geocoder) return;
+        if (!geocoder) {
+            console.error("geocodeAddress manual falló porque geocoder es nulo.");
+            return;
+        }
         
         const confirmBtn = document.querySelector('#modal-location button[onclick="saveLocationModal()"]');
         const originalText = confirmBtn.innerText;
         confirmBtn.disabled = true;
         confirmBtn.innerText = "Buscando dirección...";
 
+        console.log("A. Buscando dirección manual con Geocoder:", address + ', Chiclayo, Perú');
         geocoder.geocode({ address: address + ', Chiclayo, Perú' }, (results, status) => {
+            console.log("B. Respuesta manual de Geocoder:", status, results);
+            
             confirmBtn.disabled = false;
             confirmBtn.innerText = originalText;
             
@@ -731,6 +754,7 @@
                 // Retry saving
                 saveLocationModal();
             } else {
+                console.error("C. Geocoder manual falló. Status:", status);
                 alert("No pudimos encontrar la dirección exacta. Por favor, selecciona una opción de la lista o mueve el marcador en el mapa.");
             }
         });
