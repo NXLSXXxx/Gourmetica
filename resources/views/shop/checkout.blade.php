@@ -554,20 +554,35 @@
     let currentModal = null;
 
     // Callback called when Google Maps script finishes loading
-    function initGoogleMap() {
+    async function initGoogleMap() {
         const input = document.getElementById('address-search-input');
         if (!input) return;
 
-        autocomplete = new google.maps.places.Autocomplete(input, {
-            componentRestrictions: { country: 'pe' }
+        const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
+
+        autocomplete = new PlaceAutocompleteElement({
+            componentRestrictions: { country: ['pe'] }
         });
+        
+        autocomplete.id = 'address-search-input';
+        
+        const style = document.createElement('style');
+        style.innerHTML = `
+            gmp-place-autocomplete {
+                width: 100%;
+            }
+        `;
+        document.head.appendChild(style);
 
-        autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            if (!place.geometry) return;
+        input.parentNode.replaceChild(autocomplete, input);
 
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
+        autocomplete.addEventListener('gmp-placeselect', async (event) => {
+            const place = event.place;
+            await place.fetchFields({ fields: ['location'] });
+            if (!place.location) return;
+
+            const lat = place.location.lat();
+            const lng = place.location.lng();
 
             document.getElementById('form_latitude').value = lat;
             document.getElementById('form_longitude').value = lng;
@@ -577,7 +592,7 @@
                 const pos = { lat: lat, lng: lng };
                 map.setCenter(pos);
                 map.setZoom(16);
-                marker.setPosition(pos);
+                marker.position = pos;
             }
         });
 
@@ -585,26 +600,30 @@
     }
 
     // Initialize Map explicitly inside modal when opened
-    function initMapOnce() {
+    async function initMapOnce() {
         if (!map && typeof google !== 'undefined') {
             const chiclayo = { lat: -6.7719, lng: -79.8441 };
             
-            map = new google.maps.Map(document.getElementById('map'), {
+            const { Map } = await google.maps.importLibrary("maps");
+            const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+            
+            map = new Map(document.getElementById('map'), {
                 center: chiclayo,
                 zoom: 15,
-                disableDefaultUI: false
+                disableDefaultUI: false,
+                mapId: "DEMO_MAP_ID"
             });
 
-            marker = new google.maps.Marker({
+            marker = new AdvancedMarkerElement({
                 position: chiclayo,
                 map: map,
-                draggable: true
+                gmpDraggable: true
             });
 
             marker.addListener('dragend', () => {
-                const pos = marker.getPosition();
-                const lat = pos.lat();
-                const lng = pos.lng();
+                const pos = marker.position;
+                const lat = pos.lat;
+                const lng = pos.lng;
                 document.getElementById('form_latitude').value = lat;
                 document.getElementById('form_longitude').value = lng;
                 document.getElementById('modal-address-preview').innerText = "Lat: " + lat.toFixed(4) + ", Lng: " + lng.toFixed(4);
@@ -621,7 +640,11 @@
             if (status === 'OK' && results[0]) {
                 let addr = results[0].formatted_address;
                 addr = addr.replace(', Peru', '').replace(', Perú', '');
-                document.getElementById('address-search-input').value = addr;
+                const input = document.getElementById('address-search-input');
+                if(input) {
+                    if('inputValue' in input) input.inputValue = addr;
+                    else input.value = addr;
+                }
             }
         });
     }
@@ -645,7 +668,7 @@
                 if (map && marker) {
                     map.setCenter(pos);
                     map.setZoom(16);
-                    marker.setPosition(pos);
+                    marker.position = pos;
                 }
 
                 reverseGeocode(lat, lng);
@@ -775,7 +798,8 @@
                 return;
             }
 
-            const addr = document.getElementById('address-search-input').value || 'Dirección seleccionada en mapa';
+            const addrElement = document.getElementById('address-search-input');
+            const addr = (addrElement && addrElement.inputValue) ? addrElement.inputValue : ((addrElement && addrElement.value) ? addrElement.value : 'Dirección seleccionada en mapa');
             
             fetchDeliveryPrice(lat, lng, function(success) {
                 if (success) {

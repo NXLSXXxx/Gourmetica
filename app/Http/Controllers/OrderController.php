@@ -186,7 +186,7 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $result['message'] ?? 'Error al calcular precio del delivery con Nakama.'
-            ], 400);
+            ], 200);
         }
 
         // FALLBACK: Buscar en polígonos locales de Gourmetica para la sede seleccionada
@@ -244,6 +244,6 @@ class OrderController extends Controller
         return response()->json([
             'success' => false,
             'message' => 'La ubicación seleccionada está fuera de nuestras zonas de cobertura express autorizadas.'
-        ], 400);
+        ], 200);
     }
 }
