@@ -632,8 +632,8 @@
                 geocoder.geocode(request, (results, status) => {
                     
                     if (status === 'OK' && results[0]) {
-                        const lat = results[0].geometry.location.lat();
-                        const lng = results[0].geometry.location.lng();
+                        const lat = typeof results[0].geometry.location.lat === 'function' ? results[0].geometry.location.lat() : results[0].geometry.location.lat;
+                        const lng = typeof results[0].geometry.location.lng === 'function' ? results[0].geometry.location.lng() : results[0].geometry.location.lng;
                         const address = results[0].formatted_address;
 
                         document.getElementById('form_latitude').value = lat;
@@ -644,7 +644,8 @@
                             const pos = { lat: lat, lng: lng };
                             map.setCenter(pos);
                             map.setZoom(16);
-                            marker.position = pos;
+                            if (typeof marker.setPosition === 'function') marker.setPosition(pos);
+                            else marker.position = pos;
                         }
                         saveLocationModal();
                     } else {
