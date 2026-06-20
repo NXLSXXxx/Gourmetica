@@ -602,6 +602,18 @@
             }
         });
 
+        // Autocompletado en tiempo real mientras escribe (con retraso de 1 segundo para no saturar la API)
+        let typingTimer;
+        autocomplete.addEventListener('input', () => {
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(() => {
+                const text = autocomplete.value || autocomplete.inputValue;
+                if (text && text.trim().length > 3) {
+                    geocodeAddressForPreview(text);
+                }
+            }, 1000);
+        });
+
         autocomplete.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -613,17 +625,13 @@
         });
 
         autocomplete.addEventListener('gmp-placeselect', async (event) => {
-            console.log("1. gmp-placeselect disparado", event);
             const place = event.place;
             if (!place) {
-                console.error("2. Error: event.place es undefined o nulo");
                 return;
             }
             
             try {
-                console.log("3. Intentando fetchFields para el lugar:", place.id);
                 await place.fetchFields({ fields: ['location', 'formattedAddress'] });
-                console.log("4. fetchFields exitoso. Datos:", place);
                 
                 if (place.location) {
                     const lat = place.location.lat();
@@ -641,20 +649,16 @@
                         marker.position = pos;
                     }
                     return;
-                } else {
-                    console.error("5. fetchFields funcionó pero place.location está vacío.");
                 }
             } catch (error) {
-                console.error("X. Error crítico en fetchFields (Probablemente falte habilitar 'Places API (New)' en Google Cloud):", error);
+                // Silently ignore or handle
             }
             
             // Fallback using Geocoder if fetchFields is restricted or fails
             if (geocoder) {
                 const request = place.id ? { placeId: place.id } : { address: (autocomplete.value || autocomplete.inputValue) + ', Perú' };
-                console.log("6. Ejecutando Geocoder de respaldo con request:", request);
                 
                 geocoder.geocode(request, (results, status) => {
-                    console.log("7. Respuesta de Geocoder de respaldo:", status, results);
                     
                     if (status === 'OK' && results[0]) {
                         const lat = results[0].geometry.location.lat();
@@ -672,17 +676,13 @@
                             marker.position = pos;
                         }
                     } else {
-                        console.error("8. Geocoder falló. Status:", status);
                         alert("No pudimos obtener la ubicación exacta. Por favor, intenta de nuevo.");
                     }
                 });
-            } else {
-                console.error("9. Geocoder de respaldo falló porque geocoder no está inicializado.");
             }
         });
 
         geocoder = new google.maps.Geocoder();
-        console.log("0. Google Maps inicializado correctamente.");
     }
 
     // Geocode solo para previsualizar el punto en el mapa (cuando el usuario escribe y hace clic afuera)
@@ -770,9 +770,7 @@
         confirmBtn.disabled = true;
         confirmBtn.innerText = "Buscando dirección...";
 
-        console.log("A. Buscando dirección manual con Geocoder:", address + ', Chiclayo, Perú');
         geocoder.geocode({ address: address + ', Chiclayo, Perú' }, (results, status) => {
-            console.log("B. Respuesta manual de Geocoder:", status, results);
             
             confirmBtn.disabled = false;
             confirmBtn.innerText = originalText;
@@ -794,15 +792,12 @@
                         else marker.position = pos;
                     }
                     
-                    console.log("C. Todo parseado bien. Ejecutando saveLocationModal con lat/lng:", lat, lng);
                     // Llama de nuevo a saveLocationModal, ahora que lat y lng existen.
                     saveLocationModal();
                 } else {
-                    console.error("C. Geocoder manual falló. Status:", status);
                     alert("No pudimos encontrar la dirección exacta. Por favor, selecciona una opción de la lista o mueve el marcador en el mapa.");
                 }
             } catch (error) {
-                console.error("D. Error crítico procesando la respuesta del Geocoder:", error);
                 alert("Ocurrió un error al procesar tu dirección.");
             }
         });
@@ -858,21 +853,17 @@
                 return res.json();
             })
             .then(data => {
-                console.log("F. Respuesta de fetchDeliveryPrice parseada:", data);
                 if (data.success) {
                     if (data.fuera_de_chiclayo) {
-                        console.warn("G. El backend reporta que la ubicación está fuera de chiclayo (o fuera de la cobertura).");
                         selectedDeliveryPrice = 0;
                         closeModal();
                         setTimeout(() => openModal('modal-no-coverage'), 300);
                         callback(false);
                     } else {
-                        console.log("G. Cobertura aceptada. Precio:", data.price);
                         selectedDeliveryPrice = parseFloat(data.price);
                         callback(true);
                     }
                 } else {
-                    console.error("H. El backend devolvió success: false. Mensaje:", data.message);
                     closeModal();
                     setTimeout(() => openModal('modal-no-coverage'), 300);
                     callback(false);
