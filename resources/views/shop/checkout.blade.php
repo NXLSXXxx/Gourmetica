@@ -445,58 +445,37 @@
                     </div>
                 </div>
 
-                <!-- Block 7: Información de pago -->
+                <!-- Block 7: Información de pago (IZIPAY Todo en Uno) -->
                 <div class="pt-6">
                     <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                        <h2 class="font-bold text-gray-900 text-base">Información de pago</h2>
+                        <svg class="w-5 h-5 text-[#E50000]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        <h2 class="font-bold text-gray-900 text-base flex-1">Pago 100% Seguro</h2>
+                        <img src="https://izipay.pe/wp-content/uploads/2021/04/logo-izipay.svg" class="h-4" alt="Izipay">
                     </div>
                     
-                    <div class="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
-                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="payment_method" value="culqi" id="pm-culqi" class="text-black focus:ring-black" checked>
-                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Tarjeta de Crédito / Débito (Culqi)</span>
-                        </label>
-
-                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="payment_method" value="izipay" id="pm-izipay" class="text-black focus:ring-black">
-                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1 flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#E50000]" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
-                                Pago con Tarjeta — <strong class="text-[#E50000] ml-1">IZIPAY</strong>
-                            </span>
-                        </label>
-
-                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="payment_method" value="yape" class="text-black focus:ring-black">
-                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Yape</span>
-                        </label>
-                        
-                        <label class="flex items-center p-3 cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="payment_method" value="plin" class="text-black focus:ring-black">
-                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Plin</span>
-                        </label>
-                    </div>
+                    <input type="hidden" name="payment_method" value="izipay" id="pm-izipay">
 
                     {{-- Contenedor del formulario embebido de IZIPAY --}}
-                    <div id="izipay-form-container" class="hidden mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                        <div class="flex items-center gap-2 mb-3">
+                    <div id="izipay-form-container" class="mt-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-200 relative overflow-hidden">
+                        <div class="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
                             <div class="w-6 h-6 bg-[#E50000] rounded-full flex items-center justify-center">
                                 <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"/></svg>
                             </div>
                             <p class="text-sm font-bold text-gray-900">Pago seguro con IZIPAY</p>
                             <span class="ml-auto text-[10px] text-gray-400 flex items-center gap-1">
-                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
-                                Conexión segura SSL
+                                <svg class="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                                SSL 256-bit
                             </span>
                         </div>
+                        
                         {{-- El SDK de IZIPAY inyecta el iframe aquí --}}
-                        <div id="izipay-payment-form">
-                            <div id="izipay-loading" class="text-center py-6">
-                                <div class="inline-block w-6 h-6 border-2 border-[#E50000] border-t-transparent rounded-full animate-spin"></div>
-                                <p class="text-xs text-gray-500 mt-2">Cargando formulario de pago...</p>
+                        <div id="izipay-payment-form" class="flex justify-center min-h-[250px]">
+                            <div id="izipay-loading" class="text-center py-10 w-full flex flex-col items-center justify-center">
+                                <div class="inline-block w-8 h-8 border-4 border-[#E50000] border-t-transparent rounded-full animate-spin"></div>
+                                <p class="text-xs font-medium text-gray-600 mt-4">Iniciando entorno seguro...</p>
                             </div>
                         </div>
-                        <p class="text-[10px] text-gray-400 mt-3 text-center">Tus datos de tarjeta son procesados de forma segura por IZIPAY. Gourmetica nunca almacena datos de tu tarjeta.</p>
+                        <p class="text-[10px] text-gray-400 mt-4 text-center leading-tight">Tus datos de tarjeta son procesados de forma segura directamente por IZIPAY. Gourmetica no almacena información de pago.</p>
                     </div>
 
                     <div class="mt-4 px-2">
@@ -1056,19 +1035,11 @@
     let izipayFormLoaded = false;
     let izipayFormToken  = null;
 
-    // Escuchar cambios en el método de pago
-    document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
-        radio.addEventListener('change', function() {
-            const izipayContainer = document.getElementById('izipay-form-container');
-            if (this.value === 'izipay') {
-                izipayContainer.classList.remove('hidden');
-                if (!izipayFormLoaded) {
-                    loadIzipayForm();
-                }
-            } else {
-                izipayContainer.classList.add('hidden');
-            }
-        });
+    // Cargar automáticamente Izipay al iniciar la pantalla
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!izipayFormLoaded) {
+            loadIzipayForm();
+        }
     });
 
     // Cargar el formToken de IZIPAY vía AJAX y montar el SDK
