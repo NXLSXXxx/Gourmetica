@@ -40,7 +40,7 @@ class SocialController extends Controller
                     'email' => $googleUser->email,
                     'google_id' => $googleUser->id,
                     'avatar' => $googleUser->avatar,
-                    'password' => bcrypt(str_random(16)),
+                    'password' => bcrypt(\Illuminate\Support\Str::random(16)),
                     'role_id' => $clienteRole->id,
                 ]);
             }
