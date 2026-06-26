@@ -11,6 +11,14 @@
     
     <!-- Styles & Tailwind CDN -->
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-brand-primary: #E9A171;
+            --color-brand-secondary: #3D2B1F;
+            --color-brand-bg: #FFFBF7;
+            --color-brand-dark: #2D1B14;
+        }
+    </style>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     
