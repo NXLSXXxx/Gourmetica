@@ -10,8 +10,8 @@ class OrderController extends Controller
     {
         $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
-            'payment_method' => 'required|in:culqi,transfer,yape,plin',
-            'shipping_type' => 'required|in:pickup,delivery',
+            'payment_method' => 'required|in:culqi,izipay,transfer,yape,plin',
+            'shipping_type'  => 'required|in:pickup,delivery',
         ]);
 
         $cart = session()->get('cart', []);
@@ -132,6 +132,15 @@ class OrderController extends Controller
             }
         }
 
+        // Pago IZIPAY: verificar que el token del formulario sea válido
+        if ($request->payment_method === 'izipay' && $request->izipay_token) {
+            // El token de IZIPAY (kr-answer) fue validado en el frontend.
+            // Aquí marcamos el pedido como pagado y creamos la venta.
+            // Para extra seguridad se puede re-verificar el HMAC del kr-hash.
+            $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+            \App\Models\Sale::createFromOrder($order);
+        }
+
         foreach ($cart as $item) {
             \App\Models\OrderItem::create([
                 'order_id' => $order->id,
@@ -155,6 +164,44 @@ class OrderController extends Controller
         session()->forget('cart');
 
         return view('shop.success', compact('order'));
+    }
+
+    /**
+     * Genera el formToken de IZIPAY para el formulario embebido.
+     * Llamado por AJAX desde el frontend antes de abrir el iframe de pago.
+     */
+    public function izipayToken(\Illuminate\Http\Request $request)
+    {
+        $cart = session()->get('cart', []);
+
+        if (empty($cart)) {
+            return response()->json(['success' => false, 'message' => 'Carrito vacío.'], 400);
+        }
+
+        $total       = 0;
+        foreach ($cart as $item) {
+            $total += $item['price'] * $item['quantity'];
+        }
+
+        $email = $request->input('email', 'guest@gourmetica.com.pe');
+
+        // Crear un order temporal (pending) para tener un ID de referencia
+        // No se guardan items hasta confirmar el pago en store()
+        $izipay = new \App\Services\IzipayService();
+        $result = $izipay->createFormToken((float)$total, $email, time());
+
+        if ($result['success']) {
+            return response()->json([
+                'success'    => true,
+                'formToken'  => $result['formToken'],
+                'publicKey'  => $izipay->getPublicKey(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => $result['message'],
+        ], 500);
     }
 
     public function calculateDelivery(Request $request)

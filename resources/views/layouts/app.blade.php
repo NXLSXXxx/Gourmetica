@@ -9,20 +9,8 @@
     <!-- SEO & Icons -->
     <link rel="icon" type="image/png" href="/favicon.png">
     
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
     <!-- Styles & Tailwind CDN -->
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
-    <style type="text/tailwindcss">
-        @theme {
-            --color-brand-primary: #E9A171;
-            --color-brand-secondary: #3D2B1F;
-            --color-brand-bg: #FFFBF7;
-            --color-brand-dark: #2D1B14;
-        }
-    </style>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     
@@ -131,7 +119,6 @@
                                 <!-- Right: Products Grid -->
                                 <div class="w-3/4 p-10 overflow-y-auto no-scrollbar relative">
                                     <div id="mega-products-grid" class="grid grid-cols-3 gap-8 h-full">
-                                        <!-- Products will be injected here via AJAX -->
                                         <div class="col-span-3 flex flex-col items-center justify-center h-full text-brand-secondary/40 min-h-[300px]">
                                             <div class="relative mb-6">
                                                 <div class="absolute inset-0 bg-brand-primary/10 rounded-full animate-ping"></div>

@@ -52,11 +52,16 @@ Route::get('/contact', function () {
 Route::get('/catering', [\App\Http\Controllers\Shop\CateringController::class, 'index'])->name('shop.catering');
 Route::post('/catering', [\App\Http\Controllers\Shop\CateringController::class, 'store'])->name('shop.catering.store');
 
+// Checkout accesible sin login (para validación de pasarelas como IZIPAY)
+Route::get('/checkout', [ShopController::class, 'checkout'])->name('shop.checkout');
+Route::get('/checkout/calculate-delivery', [\App\Http\Controllers\OrderController::class, 'calculateDelivery'])->name('checkout.calculate_delivery');
+
+// Endpoint AJAX: genera el formToken de IZIPAY (no requiere auth, pero sí carrito activo)
+Route::post('/checkout/izipay-token', [\App\Http\Controllers\OrderController::class, 'izipayToken'])->name('checkout.izipay_token');
+
 Route::middleware(['auth:web'])->group(function () {
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
     Route::post('/favorites/{product}/toggle', [\App\Http\Controllers\FavoriteController::class, 'toggle'])->name('favorites.toggle');
-    Route::get('/checkout', [ShopController::class, 'checkout'])->name('shop.checkout');
-    Route::get('/checkout/calculate-delivery', [\App\Http\Controllers\OrderController::class, 'calculateDelivery'])->name('checkout.calculate_delivery');
     Route::post('/orders', [\App\Http\Controllers\OrderController::class, 'store'])->name('orders.store');
 });
 

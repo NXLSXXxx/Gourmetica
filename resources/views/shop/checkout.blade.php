@@ -122,7 +122,7 @@
         <div class="flex justify-between items-center p-5 border-b border-gray-100">
             <button type="button" onclick="closeModal()" class="text-gray-500 hover:text-gray-900"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
             <h3 class="font-bold text-gray-900 text-lg">Editar número de teléfono</h3>
-            <div class="w-6"></div> <!-- Spacer for center alignment -->
+            <div class="w-6"></div>
         </div>
         <div class="p-6">
             <div class="flex gap-3">
@@ -295,19 +295,16 @@
     @endif
 
     <div class="mb-6 flex justify-between items-center">
-        <div class="flex items-center gap-4">
-            <button class="text-gray-900"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
-            <h1 class="text-2xl font-bold text-gray-900">Checkout</h1>
-        </div>
-        <!-- Logo placeholder -->
+        <h1 class="text-2xl font-bold text-gray-900">Checkout</h1>
         <h2 class="hidden md:block text-red-600 font-extrabold text-xl tracking-tighter">GOURMETICA</h2>
     </div>
 
     <form action="{{ route('orders.store') }}" method="POST" id="checkout-form">
         @csrf
         <input type="hidden" name="culqi_token" id="culqi_token">
+        <input type="hidden" name="izipay_token" id="izipay_token">
+        <input type="hidden" name="izipay_transaction_uuid" id="izipay_transaction_uuid">
         
-        <!-- Hidden Inputs for Syncing Modal Data -->
         <input type="hidden" name="shipping_type" id="form_shipping_type" value="pickup">
         <input type="hidden" name="headquarter_id" id="form_pickup_hq" value="{{ session('selected_headquarter_id') ?? $headquarters->first()->id ?? '' }}">
         <input type="hidden" name="latitude" id="form_latitude">
@@ -457,10 +454,18 @@
                     
                     <div class="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
                         <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="payment_method" value="culqi" class="text-black focus:ring-black" checked>
-                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Tarjeta de Crédito / Débito</span>
+                            <input type="radio" name="payment_method" value="culqi" id="pm-culqi" class="text-black focus:ring-black" checked>
+                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Tarjeta de Crédito / Débito (Culqi)</span>
                         </label>
-                        
+
+                        <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="payment_method" value="izipay" id="pm-izipay" class="text-black focus:ring-black">
+                            <span class="ml-3 font-medium text-sm text-gray-900 flex-1 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#E50000]" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                                Pago con Tarjeta — <strong class="text-[#E50000] ml-1">IZIPAY</strong>
+                            </span>
+                        </label>
+
                         <label class="flex items-center p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
                             <input type="radio" name="payment_method" value="yape" class="text-black focus:ring-black">
                             <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Yape</span>
@@ -470,6 +475,28 @@
                             <input type="radio" name="payment_method" value="plin" class="text-black focus:ring-black">
                             <span class="ml-3 font-medium text-sm text-gray-900 flex-1">Pago con Plin</span>
                         </label>
+                    </div>
+
+                    {{-- Contenedor del formulario embebido de IZIPAY --}}
+                    <div id="izipay-form-container" class="hidden mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-6 h-6 bg-[#E50000] rounded-full flex items-center justify-center">
+                                <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"/></svg>
+                            </div>
+                            <p class="text-sm font-bold text-gray-900">Pago seguro con IZIPAY</p>
+                            <span class="ml-auto text-[10px] text-gray-400 flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                                Conexión segura SSL
+                            </span>
+                        </div>
+                        {{-- El SDK de IZIPAY inyecta el iframe aquí --}}
+                        <div id="izipay-payment-form">
+                            <div id="izipay-loading" class="text-center py-6">
+                                <div class="inline-block w-6 h-6 border-2 border-[#E50000] border-t-transparent rounded-full animate-spin"></div>
+                                <p class="text-xs text-gray-500 mt-2">Cargando formulario de pago...</p>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-3 text-center">Tus datos de tarjeta son procesados de forma segura por IZIPAY. Gourmetica nunca almacena datos de tu tarjeta.</p>
                     </div>
 
                     <div class="mt-4 px-2">
@@ -541,6 +568,13 @@
 
 @push('scripts')
 <script src="https://checkout.culqi.com/js/v4"></script>
+<script src="https://static.micuentaweb.pe/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"
+    kr-public-key="PLACEHOLDER_PUBLIC_KEY"
+    kr-language="es-PE"
+    kr-post-url-success="none"
+    id="izipay-sdk-script">
+</script>
+<link rel="stylesheet" href="https://static.micuentaweb.pe/static/js/krypton-client/V4.0/stable/neon-reset.min.css">
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXo-Lpvk7_PQ6KnL4XjxA5ux1pHsopYTk&libraries=places&callback=initGoogleMap&loading=async" async defer></script>
 <script>
     const cartTotal = parseFloat("{{ $cartTotal }}");
@@ -1018,10 +1052,116 @@
         document.getElementById('text-gift').innerText = this.checked ? "El pedido se entregará sin boleta / factura (formato regalo)." : "El pedido se entregará con boleta / factura normal.";
     });
 
-    // Culqi logic
-    Culqi.publicKey = '{{ $culqiPublicKey ?? "pk_test_sample" }}';
+    // --- IZIPAY Integration ---
+    let izipayFormLoaded = false;
+    let izipayFormToken  = null;
+
+    // Escuchar cambios en el método de pago
+    document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            const izipayContainer = document.getElementById('izipay-form-container');
+            if (this.value === 'izipay') {
+                izipayContainer.classList.remove('hidden');
+                if (!izipayFormLoaded) {
+                    loadIzipayForm();
+                }
+            } else {
+                izipayContainer.classList.add('hidden');
+            }
+        });
+    });
+
+    // Cargar el formToken de IZIPAY vía AJAX y montar el SDK
+    async function loadIzipayForm() {
+        const emailField  = document.querySelector('input[name="email"]');
+        const emailValue  = emailField ? emailField.value : 'guest@gourmetica.com.pe';
+
+        try {
+            const response = await fetch('{{ route("checkout.izipay_token") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                        || '{{ csrf_token() }}',
+                },
+                body: JSON.stringify({ email: emailValue }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                document.getElementById('izipay-loading').innerHTML =
+                    `<p class="text-sm text-red-500">⚠️ No se pudo cargar el formulario de pago: ${data.message}</p>`;
+                return;
+            }
+
+            izipayFormToken = data.formToken;
+
+            // Actualizar la clave pública en el script del SDK
+            const sdkScript = document.getElementById('izipay-sdk-script');
+            if (sdkScript && data.publicKey) {
+                sdkScript.setAttribute('kr-public-key', data.publicKey);
+            }
+
+            // Inicializar KR (SDK de IZIPAY) con el formToken
+            await KR.setFormConfig({
+                formToken: data.formToken,
+                'kr-language': 'es-PE',
+            });
+
+            // Inyectar el formulario en el contenedor
+            const formContainer = document.getElementById('izipay-payment-form');
+            formContainer.innerHTML = '<div class="kr-embedded" kr-form-token="' + data.formToken + '"></div>';
+
+            await KR.renderElements('#izipay-payment-form');
+            await KR.onSubmit(handleIzipayPayment);
+
+            // Ocultar el spinner de carga
+            const loading = document.getElementById('izipay-loading');
+            if (loading) loading.remove();
+
+            izipayFormLoaded = true;
+
+        } catch (err) {
+            document.getElementById('izipay-loading').innerHTML =
+                '<p class="text-sm text-red-500">⚠️ Error de conexión al cargar el formulario IZIPAY.</p>';
+            console.error('IZIPAY loadForm error:', err);
+        }
+    }
+
+    // Callback cuando IZIPAY procesa el pago exitosamente
+    async function handleIzipayPayment(response) {
+        // response contiene el resultado del pago de IZIPAY
+        const { clientAnswer, hashKey } = response;
+
+        if (clientAnswer && clientAnswer.orderStatus === 'PAID') {
+            // Guardar el token/uuid del pago en el formulario
+            document.getElementById('izipay_token').value = clientAnswer.transactions?.[0]?.uuid || 'izipay-paid';
+            document.getElementById('izipay_transaction_uuid').value = clientAnswer.orderDetails?.orderId || '';
+
+            // Enviar el formulario principal de pedido
+            document.getElementById('checkout-form').submit();
+        } else {
+            alert('El pago no fue aprobado. Por favor, verifica tus datos e intenta nuevamente.');
+        }
+
+        return false; // Prevenir redirección automática del SDK
+    }
+
+    // Modificar el comportamiento del botón submit para IZIPAY
     document.getElementById('checkout-form').addEventListener('submit', function(e) {
         const method = document.querySelector('input[name="payment_method"]:checked').value;
+
+        if (method === 'izipay') {
+            // IZIPAY maneja su propio submit a través del SDK embebido
+            // Solo bloqueamos el submit nativo si el token no está listo
+            if (!document.getElementById('izipay_token').value) {
+                e.preventDefault();
+                alert('Por favor, completa el pago con IZIPAY en el formulario de arriba.');
+            }
+            return;
+        }
+
         if (method === 'culqi' && !document.getElementById('culqi_token').value) {
             e.preventDefault();
             Culqi.settings({

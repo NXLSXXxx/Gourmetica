@@ -1,29 +1,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@100..900&display=swap');
 
 :root {
-    /* Brand Colors - Based on Logo */
-    --color-primary: #E9A171;    /* Peach Orange from Logo */
-    --color-secondary: #3D2B1F;  /* Deep Coffee/Chocolate */
-    --color-bg: #FFFBF7;         /* Warm Paper White */
-    --color-accent: #7C9473;     /* Sprout Green */
+    --color-primary: #E9A171;
+    --color-secondary: #3D2B1F;
+    --color-bg: #FFFBF7;
     --color-text: #2D1B14;
     --color-text-muted: #8B7E74;
-    
-    /* Typography */
+
     --font-heading: 'Playfair Display', serif;
     --font-body: 'Inter', sans-serif;
-    
-    /* Spacing & Transitions */
+
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
-    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05);
 
-    /* Border Radii */
     --radius-pill: 9999px;
-    --radius-card: 2.5rem; /* ~40px for that Maria Almenara look */
+    --radius-card: 2.5rem;
 }
 
-/* Custom Base Styles */
 body {
     background-color: var(--color-bg);
     color: var(--color-text);
@@ -37,16 +30,12 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-secondary);
 }
 
-.banner-hero h1 {
+.banner-hero h1,
+h1.text-white, h2.text-white, h3.text-white,
+h4.text-white, h5.text-white, h6.text-white {
     color: white;
 }
 
-h1.text-white, h2.text-white, h3.text-white, h4.text-white,
-h5.text-white, h6.text-white {
-    color: white;
-}
-
-/* Premium Utilities */
 .glass {
     background: white;
     border-bottom: 1px solid #eee;
@@ -91,7 +80,6 @@ h5.text-white, h6.text-white {
     font-size: 0.9rem;
 }
 
-/* Split Hero */
 .hero-split {
     display: flex;
     height: 500px;
@@ -119,7 +107,7 @@ h5.text-white, h6.text-white {
 }
 
 .hero-content h1 {
-    font-family: var(--font-body); /* Maria uses bold sans for hero */
+    font-family: var(--font-body);
     font-size: 4rem;
     line-height: 1;
     margin-bottom: 2rem;
@@ -213,10 +201,9 @@ h5.text-white, h6.text-white {
     box-shadow: var(--shadow-premium);
 }
 
-/* Mega Menu */
 .mega-menu {
     position: fixed;
-    top: 128px; /* header (64px) + subnav (~44px) + border */
+    top: 128px;
     left: 0;
     right: 0;
     background: white;
@@ -256,7 +243,6 @@ h5.text-white, h6.text-white {
     transform: scale(1.05);
 }
 
-/* Category Bubbles */
 .category-bubbles {
     display: flex;
     justify-content: center;
@@ -304,46 +290,6 @@ h5.text-white, h6.text-white {
     letter-spacing: 0.05em;
 }
 
-/* Service Cards */
-.service-card {
-    background: white;
-    border-radius: 2.5rem;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.service-image {
-    height: 250px;
-    background-size: cover;
-    background-position: center;
-}
-
-.service-content {
-    padding: 2.5rem;
-    text-align: center;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.service-content h3 {
-    font-family: var(--font-body);
-    font-weight: 800;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-.service-content p {
-    font-size: 0.9rem;
-    color: #666;
-    margin-bottom: 2rem;
-}
-
-/* Promo Banner */
 .promo-banner {
     background-size: cover;
     background-position: center;
@@ -372,7 +318,14 @@ h5.text-white, h6.text-white {
     text-align: center;
 }
 
-/* Responsive adjustments for mobile screens */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
 @media (max-width: 768px) {
     .hero-split {
         flex-direction: column !important;
@@ -380,44 +333,44 @@ h5.text-white, h6.text-white {
         min-height: 520px;
         margin: 0.5rem !important;
     }
-    
+
     .hero-image {
         height: 250px !important;
         flex: none !important;
         width: 100% !important;
     }
-    
+
     .hero-content {
         flex: none !important;
         width: 100% !important;
         padding: 2rem 1.5rem !important;
         text-align: center !important;
     }
-    
+
     .hero-content .text-white {
         text-align: center !important;
     }
-    
+
     .hero-content div.flex {
         justify-content: center !important;
     }
-    
+
     .hero-content h1 {
         font-size: 2.2rem !important;
         margin-bottom: 1rem !important;
         line-height: 1.1 !important;
     }
-    
+
     .hero-content p {
         font-size: 1rem !important;
         margin-bottom: 1.5rem !important;
     }
-    
+
     .btn-pide {
         font-size: 1.1rem !important;
         padding: 0.6rem 2rem !important;
     }
-    
+
     .hero-content .absolute.bottom-10.right-10 {
         display: none !important;
     }
@@ -435,7 +388,7 @@ h5.text-white, h6.text-white {
         min-height: 220px !important;
         padding: 3rem 1.5rem !important;
     }
-    
+
     .promo-banner h2 {
         font-size: 1.5rem !important;
         line-height: 1.3 !important;
