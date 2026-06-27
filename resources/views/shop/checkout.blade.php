@@ -1101,9 +1101,9 @@
                 'kr-language': 'es-PE',
             });
 
-            // Inyectar el formulario en el contenedor
+            // Inyectar el formulario en el contenedor (usando kr-smart-form para mostrar todos los métodos)
             const formContainer = document.getElementById('izipay-payment-form');
-            formContainer.innerHTML = '<div class="kr-embedded" kr-form-token="' + data.formToken + '"></div>';
+            formContainer.innerHTML = '<div class="kr-smart-form" kr-form-token="' + data.formToken + '"></div>';
 
             await KR.renderElements('#izipay-payment-form');
             await KR.onSubmit(handleIzipayPayment);
