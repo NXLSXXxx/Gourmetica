@@ -450,7 +450,6 @@
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-[#E50000]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                         <h2 class="font-bold text-gray-900 text-base flex-1">Pago 100% Seguro</h2>
-                        <img src="https://izipay.pe/wp-content/uploads/2021/04/logo-izipay.svg" class="h-4" alt="Izipay">
                     </div>
                     
                     <input type="hidden" name="payment_method" value="izipay" id="pm-izipay">
@@ -565,6 +564,28 @@
     let autocomplete = null;
     let geocoder = null;
     let currentModal = null;
+
+    function openModal(modalId) {
+        currentModal = document.getElementById(modalId);
+        if(currentModal) {
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            document.getElementById('modal-overlay').classList.add('flex');
+            currentModal.classList.remove('hidden');
+        }
+    }
+
+    function closeModal() {
+        if(currentModal) {
+            currentModal.classList.add('hidden');
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('flex');
+            currentModal = null;
+        } else {
+            document.querySelectorAll('.modal-box').forEach(el => el.classList.add('hidden'));
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('flex');
+        }
+    }
 
     // Callback called when Google Maps script finishes loading
     async function initGoogleMap() {

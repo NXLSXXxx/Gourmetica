@@ -23,9 +23,7 @@ class IzipayService
 
         // Sandbox vs Production URL
         $isSandbox = Setting::get('izipay_sandbox', env('IZIPAY_SANDBOX', '1')) === '1';
-        $this->baseUrl = $isSandbox
-            ? 'https://sandbox-api-pe.izipay.pe'
-            : 'https://api-pe.izipay.pe';
+        $this->baseUrl = 'https://api.micuentaweb.pe';
     }
 
     /**
