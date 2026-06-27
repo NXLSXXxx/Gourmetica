@@ -16,7 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except: [
-            'api/webhook/nakama'
+            'api/webhook/nakama',
+            'checkout/izipay-webhook'
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

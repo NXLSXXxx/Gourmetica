@@ -58,6 +58,7 @@ Route::get('/checkout/calculate-delivery', [\App\Http\Controllers\OrderControlle
 
 // Endpoint AJAX: genera el formToken de IZIPAY (no requiere auth, pero sí carrito activo)
 Route::post('/checkout/izipay-token', [\App\Http\Controllers\OrderController::class, 'izipayToken'])->name('checkout.izipay_token');
+Route::post('/checkout/izipay-webhook', [\App\Http\Controllers\OrderController::class, 'izipayWebhook'])->name('checkout.izipay_webhook');
 
 Route::middleware(['auth:web'])->group(function () {
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');

@@ -293,4 +293,68 @@ class OrderController extends Controller
             'message' => 'La ubicación seleccionada está fuera de nuestras zonas de cobertura express autorizadas.'
         ], 200);
     }
+
+    /**
+     * Webhook (IPN) de IZIPAY para notificación instantánea del resultado del pago.
+     */
+    public function izipayWebhook(Request $request)
+    {
+        $izipay = new \App\Services\IzipayService();
+
+        $krHash = $request->input('kr-hash');
+        $krAnswer = $request->input('kr-answer');
+        
+        if (!$krHash || !$krAnswer) {
+            \Illuminate\Support\Facades\Log::error('IZIPAY Webhook: Missing hash or answer');
+            return response('Error', 400);
+        }
+
+        // Validate the signature to ensure the webhook comes from IZIPAY
+        $isValid = $izipay->verifySignature($request->all(), $krHash);
+
+        if (!$isValid) {
+            \Illuminate\Support\Facades\Log::error('IZIPAY Webhook: Invalid signature', $request->all());
+            return response('Invalid signature', 400);
+        }
+
+        $answer = json_decode($krAnswer, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return response('Invalid JSON', 400);
+        }
+
+        $orderStatus = $answer['orderStatus'] ?? '';
+        $transactionUuid = $answer['transactions'][0]['uuid'] ?? '';
+        
+        // Extract order ID from "GOURMETICA-{ID}" format
+        $orderReference = $answer['orderDetails']['orderId'] ?? '';
+        $orderId = (int) str_replace('GOURMETICA-', '', $orderReference);
+
+        if (!$orderId) {
+            return response('OK - No valid order reference', 200);
+        }
+
+        $order = \App\Models\Order::find($orderId);
+
+        if (!$order) {
+            return response('OK - Order not found', 200);
+        }
+
+        if ($orderStatus === 'PAID') {
+            if ($order->payment_status !== 'paid') {
+                $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+                \App\Models\Sale::createFromOrder($order);
+                
+                // Si tienes lógica adicional (decrementar stock, Nakama, etc.), va aquí.
+                // Asegúrate de no ejecutarla dos veces si el pedido ya estaba pagado.
+            }
+        } elseif ($orderStatus === 'REJECTED' || $orderStatus === 'CANCELED') {
+            if ($order->status !== 'cancelled' && $order->payment_status !== 'paid') {
+                $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+            }
+        }
+
+        return response('OK', 200);
+    }
 }
+
