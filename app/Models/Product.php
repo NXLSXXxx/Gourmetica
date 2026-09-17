@@ -29,6 +29,20 @@ class Product extends Model
         });
     }
 
+    protected static ?bool $hasIsAvailableColumn = null;
+
+    public static function hasIsAvailableColumn(): bool
+    {
+        if (static::$hasIsAvailableColumn === null) {
+            try {
+                static::$hasIsAvailableColumn = \Illuminate\Support\Facades\Schema::hasColumn('headquarter_product', 'is_available');
+            } catch (\Throwable $e) {
+                static::$hasIsAvailableColumn = false;
+            }
+        }
+        return static::$hasIsAvailableColumn;
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);
@@ -36,8 +50,13 @@ class Product extends Model
 
     public function headquarters()
     {
+        $pivotFields = ['stock', 'price'];
+        if (static::hasIsAvailableColumn()) {
+            $pivotFields[] = 'is_available';
+        }
+
         return $this->belongsToMany(Headquarter::class)
-                    ->withPivot('stock', 'price', 'is_available')
+                    ->withPivot($pivotFields)
                     ->withTimestamps();
     }
 
@@ -74,7 +93,11 @@ class Product extends Model
             ? $this->headquarters->firstWhere('id', $headquarterId)
             : $this->headquarters()->where('headquarters.id', $headquarterId)->first();
 
-        return $hq && $hq->pivot && (bool)$hq->pivot->is_available;
+        if (!$hq || !$hq->pivot) {
+            return false;
+        }
+
+        return isset($hq->pivot->is_available) ? (bool)$hq->pivot->is_available : true;
     }
 
     public function getStockForHeadquarter($headquarterId = null)
@@ -101,8 +124,10 @@ class Product extends Model
         }
 
         return $query->whereHas('headquarters', function ($q) use ($headquarterId) {
-            $q->where('headquarters.id', $headquarterId)
-              ->where('headquarter_product.is_available', true);
+            $q->where('headquarters.id', $headquarterId);
+            if (static::hasIsAvailableColumn()) {
+                $q->where('headquarter_product.is_available', true);
+            }
         });
     }
 

@@ -15,8 +15,13 @@ class Headquarter extends Model
 
     public function products()
     {
+        $pivotFields = ['stock', 'price'];
+        if (Product::hasIsAvailableColumn()) {
+            $pivotFields[] = 'is_available';
+        }
+
         return $this->belongsToMany(Product::class)
-                    ->withPivot('stock', 'price', 'is_available')
+                    ->withPivot($pivotFields)
                     ->withTimestamps();
     }
 

@@ -107,6 +107,22 @@ Route::middleware(['auth:web'])->group(function () {
 Route::get('/shop/tracking/{order}', [ShopController::class, 'tracking'])->name('shop.tracking');
 
 Route::middleware(['admin'])->prefix('intranet')->group(function () {
+    Route::get('/migrate', function () {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Migraciones ejecutadas exitosamente.',
+                'output' => $output
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    })->name('admin.migrate');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('intranet.dashboard');
     Route::get('/clients', [ClientController::class, 'index'])->name('admin.clients');
     Route::resource('/products', ProductController::class)->names('admin.products');

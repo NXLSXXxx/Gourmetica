@@ -19,6 +19,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Auto-heal: asegurar que headquarter_product tenga la columna is_available en producción
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('headquarter_product') && 
+                !\Illuminate\Support\Facades\Schema::hasColumn('headquarter_product', 'is_available')) {
+                \Illuminate\Support\Facades\Schema::table('headquarter_product', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->boolean('is_available')->default(true)->after('price');
+                });
+            }
+        } catch (\Throwable $e) {
+            // Continuar normalmente si no hay permisos de modificación
+        }
+
         \Illuminate\Support\Facades\View::composer('*', function ($view) {
             $view->with('categories', \App\Models\Category::all());
 

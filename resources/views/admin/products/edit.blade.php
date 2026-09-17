@@ -96,7 +96,7 @@
                     @foreach($headquarters as $hq)
                     @php
                         $pivot = $product->headquarters->find($hq->id)->pivot ?? null;
-                        $isAvailable = $pivot ? (bool)$pivot->is_available : false;
+                        $isAvailable = $pivot ? (bool)($pivot->is_available ?? true) : false;
                     @endphp
                     <div class="p-6 bg-slate-800/50 rounded-xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-6 {{ !$isAvailable ? 'opacity-60 hover:opacity-100 transition-opacity' : '' }}">
                         <div class="flex items-center gap-4">

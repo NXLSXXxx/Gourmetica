@@ -81,7 +81,7 @@
                             $hqPivot = $selectedHqId ? $product->headquarters->firstWhere('id', $selectedHqId)?->pivot : null;
                             $sedePrice = $product->getPriceForHeadquarter($selectedHqId);
                             $hasCustomPrice = $hqPivot && $hqPivot->price !== null && (float)$hqPivot->price > 0;
-                            $isAvailInSede = $hqPivot ? (bool)$hqPivot->is_available : false;
+                            $isAvailInSede = $hqPivot ? (bool)($hqPivot->is_available ?? true) : false;
                         @endphp
                         <tr class="hover:bg-slate-800/30 transition-colors">
                             <td class="px-6 py-4">
@@ -130,8 +130,11 @@
                             <td class="px-6 py-4">
                                 <div class="flex flex-wrap gap-1.5">
                                     @foreach($product->headquarters as $hq)
-                                    <div class="px-2 py-1 rounded-lg {{ $hq->pivot->is_available ? 'bg-slate-800 border border-slate-700 text-slate-200' : 'bg-slate-900 border border-slate-800 text-slate-500 opacity-60' }} text-[11px] font-medium flex items-center gap-1.5" title="{{ $hq->name }}: {{ $hq->pivot->stock }} en stock · Precio: S/ {{ number_format($hq->pivot->price ?? $product->base_price, 2) }}">
-                                        <span class="w-2 h-2 rounded-full {{ $hq->pivot->is_available ? 'bg-emerald-500' : 'bg-slate-600' }}"></span>
+                                    @php
+                                        $hqIsAvail = (bool)($hq->pivot->is_available ?? true);
+                                    @endphp
+                                    <div class="px-2 py-1 rounded-lg {{ $hqIsAvail ? 'bg-slate-800 border border-slate-700 text-slate-200' : 'bg-slate-900 border border-slate-800 text-slate-500 opacity-60' }} text-[11px] font-medium flex items-center gap-1.5" title="{{ $hq->name }}: {{ $hq->pivot->stock }} en stock · Precio: S/ {{ number_format($hq->pivot->price ?? $product->base_price, 2) }}">
+                                        <span class="w-2 h-2 rounded-full {{ $hqIsAvail ? 'bg-emerald-500' : 'bg-slate-600' }}"></span>
                                         <span>{{ $hq->name }}:</span>
                                         <span class="font-bold text-amber-400">S/ {{ number_format($hq->pivot->price ?? $product->base_price, 2) }}</span>
                                         <span class="text-slate-400">({{ $hq->pivot->stock }})</span>
