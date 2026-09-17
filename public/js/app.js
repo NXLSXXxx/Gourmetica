@@ -23,10 +23,21 @@ async function fetchProducts(slug, element) {
     grid.innerHTML = '<div class="col-span-3 flex items-center justify-center h-64"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div></div>';
 
     try {
-        const response = await fetch(`/shop/category/${slug}`);
+        const response = await fetch(`/shop/category/${slug}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (!response.ok) {
+            grid.innerHTML = '<div class="col-span-3 text-center py-20 text-gray-400">No hay productos en esta categoría</div>';
+            return;
+        }
+
         const products = await response.json();
 
-        if (products.length === 0) {
+        if (!Array.isArray(products) || products.length === 0) {
             grid.innerHTML = '<div class="col-span-3 text-center py-20 text-gray-400">No hay productos en esta categoría</div>';
             return;
         }
@@ -40,11 +51,11 @@ async function fetchProducts(slug, element) {
                     }
                 </div>
                 <h4 class="text-[11px] font-bold text-brand-secondary group-hover/item:text-brand-primary transition-colors line-clamp-1 uppercase tracking-tighter">${p.name}</h4>
-                <span class="text-[10px] font-extrabold text-brand-primary mt-1">S/ ${parseFloat(p.base_price).toFixed(2)}</span>
+                <span class="text-[10px] font-extrabold text-brand-primary mt-1">S/ ${parseFloat(p.price ?? p.base_price).toFixed(2)}</span>
             </a>
         `).join('');
     } catch (error) {
         console.error('Error fetching products:', error);
-        grid.innerHTML = '<div class="col-span-3 text-center py-20 text-red-400 text-xs">Error al cargar productos</div>';
+        grid.innerHTML = '<div class="col-span-3 text-center py-20 text-gray-400">No hay productos en esta categoría</div>';
     }
 }

@@ -28,7 +28,7 @@ Route::get('auth/google/callback', [App\Http\Controllers\SocialController::class
 Route::redirect('/catalog', '/shop');
 
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
-Route::get('/shop/category/{category:slug}', [ShopController::class, 'getByCategory'])->name('shop.category.ajax');
+Route::get('/shop/category/{slug}', [ShopController::class, 'getByCategory'])->name('shop.category.ajax');
 Route::get('/shop/product/{slug}', [ShopController::class, 'show'])->name('shop.product');
 Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('shop.cart');
 Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');

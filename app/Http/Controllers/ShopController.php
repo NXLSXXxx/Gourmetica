@@ -72,8 +72,16 @@ class ShopController extends Controller
         return view('shop.checkout', compact('headquarters', 'culqiPublicKey', 'deliveryZones'));
     }
 
-    public function getByCategory(\App\Models\Category $category)
+    public function getByCategory($slug)
     {
+        $category = \App\Models\Category::where('slug', $slug)
+            ->orWhere('id', $slug)
+            ->first();
+
+        if (!$category) {
+            return response()->json([]);
+        }
+
         $selectedHqId = session('selected_headquarter_id');
         $query = $category->products()->where('is_active', true);
         if ($selectedHqId) {
