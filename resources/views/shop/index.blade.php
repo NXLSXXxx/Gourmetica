@@ -25,11 +25,19 @@
 
     <div class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center mt-10">
         <!-- Eyebrow badge -->
-        <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2 mb-8">
-            <span class="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></span>
-            <span class="text-white/80 text-xs font-bold uppercase tracking-widest">
-                {{ $products->total() }} {{ $products->total() === 1 ? 'producto disponible' : 'productos disponibles' }}
-            </span>
+        <div class="inline-flex flex-wrap items-center justify-center gap-3 mb-8">
+            <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2">
+                <span class="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></span>
+                <span class="text-white/80 text-xs font-bold uppercase tracking-widest">
+                    {{ $products->total() }} {{ $products->total() === 1 ? 'producto disponible' : 'productos disponibles' }}
+                </span>
+            </div>
+            @if($selected_headquarter)
+            <button onclick="openSelectHeadquarterModal()" class="inline-flex items-center gap-1.5 bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/40 backdrop-blur-sm rounded-full px-4 py-2 text-white text-xs font-bold transition-all cursor-pointer">
+                <span>📍 {{ $selected_headquarter->name }}</span>
+                <span class="text-brand-primary underline text-[11px] ml-1">Cambiar</span>
+            </button>
+            @endif
         </div>
 
         <h1 class="text-6xl md:text-8xl font-serif font-black text-white mb-8 leading-none tracking-tight">
@@ -118,7 +126,7 @@
                     <div class="mt-4 pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-y-3 gap-x-2">
                         <div class="min-w-0">
                             <span class="text-base font-black text-brand-primary leading-none block">
-                                S/ {{ number_format($product->base_price, 2) }}
+                                S/ {{ number_format($product->getPriceForHeadquarter($selectedHqId ?? session('selected_headquarter_id')), 2) }}
                             </span>
                         </div>
                         <a href="{{ route('shop.product', $product->slug) }}"

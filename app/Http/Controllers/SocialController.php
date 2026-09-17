@@ -21,25 +21,25 @@ class SocialController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
             
-            $user = User::where('google_id', $googleUser->id)
-                        ->orWhere('email', $googleUser->email)
+            $user = User::where('google_id', $googleUser->getId())
+                        ->orWhere('email', $googleUser->getEmail())
                         ->first();
 
             if ($user) {
                 // Update google_id if it's missing (email match)
                 if (!$user->google_id) {
                     $user->update([
-                        'google_id' => $googleUser->id,
-                        'avatar' => $googleUser->avatar
+                        'google_id' => $googleUser->getId(),
+                        'avatar' => $googleUser->getAvatar()
                     ]);
                 }
             } else {
                 $clienteRole = Role::where('slug', 'cliente')->first();
                 $user = User::create([
-                    'name' => $googleUser->name,
-                    'email' => $googleUser->email,
-                    'google_id' => $googleUser->id,
-                    'avatar' => $googleUser->avatar,
+                    'name' => $googleUser->getName(),
+                    'email' => $googleUser->getEmail(),
+                    'google_id' => $googleUser->getId(),
+                    'avatar' => $googleUser->getAvatar(),
                     'password' => bcrypt(\Illuminate\Support\Str::random(16)),
                     'role_id' => $clienteRole->id,
                 ]);

@@ -138,8 +138,23 @@
                     </div>
                     <div>
                         <span class="text-xs text-slate-500 block">Correo electrónico</span>
-                        <span class="text-slate-300 font-mono text-xs">{{ $order->user->email }}</span>
+                        <span class="text-slate-300 font-mono text-xs">{{ $order->email ?: ($order->user->email ?? 'Sin correo') }}</span>
                     </div>
+                    @if($order->phone)
+                    <div>
+                        <span class="text-xs text-slate-500 block">Teléfono de contacto</span>
+                        <span class="text-slate-300 font-mono text-xs">{{ $order->phone }}</span>
+                    </div>
+                    @endif
+                    @if($order->invoice_type)
+                    <div class="mt-4 pt-3 border-t border-slate-700/60">
+                        <span class="text-xs text-slate-500 block">Comprobante Solicitado</span>
+                        <span class="text-white font-semibold uppercase">{{ $order->invoice_type == 'ninguno' ? 'Sin comprobante (Ticket)' : $order->invoice_type }}</span>
+                        @if($order->invoice_document)
+                        <span class="text-slate-400 text-xs ml-2">Doc: {{ $order->invoice_document }}</span>
+                        @endif
+                    </div>
+                    @endif
                 </div>
             </div>
 
@@ -163,6 +178,34 @@
                     <div>
                         <span class="text-xs text-slate-500 block">Método de Pago</span>
                         <span class="text-slate-300 font-semibold uppercase tracking-wide">{{ $order->payment_method }}</span>
+                    </div>
+                    @endif
+                    
+                    @if($order->delivery_date || $order->delivery_time)
+                    <div class="mt-4 pt-3 border-t border-slate-700/60 bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+                        <span class="text-xs text-amber-500/80 font-bold uppercase tracking-wider block mb-1">Horario Programado</span>
+                        <span class="text-amber-400 font-bold text-lg flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            {{ $order->delivery_date ? \Carbon\Carbon::parse($order->delivery_date)->format('d/m/Y') : 'Hoy' }} - {{ $order->delivery_time ?: 'Lo antes posible' }}
+                        </span>
+                    </div>
+                    @endif
+                    
+                    @if($order->is_gift || $order->has_card || $order->has_dedication)
+                    <div class="mt-4 pt-3 border-t border-slate-700/60 space-y-2">
+                        <span class="text-xs text-pink-400 font-bold uppercase tracking-wider block mb-1 flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
+                            Extras & Regalo
+                        </span>
+                        @if($order->is_gift)
+                            <span class="px-2 py-1 bg-pink-500/20 text-pink-300 text-xs rounded border border-pink-500/30 inline-block mr-1">🎁 Es Regalo (No enviar boleta)</span>
+                        @endif
+                        @if($order->has_card)
+                            <span class="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded border border-purple-500/30 inline-block mr-1">💌 Incluir Tarjeta Física</span>
+                        @endif
+                        @if($order->has_dedication)
+                            <span class="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded border border-blue-500/30 inline-block">✍️ Dedicatoria en Torta</span>
+                        @endif
                     </div>
                     @endif
                 </div>

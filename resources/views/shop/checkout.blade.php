@@ -2,6 +2,25 @@
 
 @section('title', 'Checkout | Gourmetica')
 
+@php
+    $openTime = \App\Models\Setting::get('store_open_time', '09:00');
+    $closeTime = \App\Models\Setting::get('store_close_time', '20:00');
+    $daysAdvance = (int) \App\Models\Setting::get('delivery_days_advance', '2');
+    $timeSlotsRaw = \App\Models\Setting::get('delivery_time_slots', 'Lo antes posible, Tarde (2:00pm - 6:00pm)');
+    $timeSlots = array_filter(array_map('trim', explode(',', $timeSlotsRaw)));
+    
+    $now = now();
+    $currentTime = $now->format('H:i');
+    $isStoreOpen = $currentTime >= $openTime && $currentTime <= $closeTime;
+    
+    // If closed, remove "Lo antes posible" from options
+    if (!$isStoreOpen) {
+        $timeSlots = array_filter($timeSlots, function($slot) {
+            return strtolower($slot) !== 'lo antes posible';
+        });
+    }
+@endphp
+
 @push('styles')
 <style>
     body {
@@ -76,8 +95,11 @@
             <div id="modal-pickup-content" class="space-y-4">
                 <p class="text-center text-xs font-bold text-gray-900 mb-4">Selecciona el local para recoger</p>
                 @foreach($headquarters as $hq)
+                @php
+                    $isHqActive = ($selectedHq && $selectedHq->id == $hq->id) || (!$selectedHq && $loop->first);
+                @endphp
                 <label class="flex items-start p-4 border border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-50 [&:has(:checked)]:border-black [&:has(:checked)]:bg-gray-50">
-                    <input type="radio" name="modal_pickup_hq" value="{{ $hq->id }}" class="mt-0.5 text-black focus:ring-black" {{ $loop->first ? 'checked' : '' }} data-name="{{ $hq->name }}" data-address="{{ $hq->address }}">
+                    <input type="radio" name="modal_pickup_hq" value="{{ $hq->id }}" class="mt-0.5 text-black focus:ring-black" {{ $isHqActive ? 'checked' : '' }} data-name="{{ $hq->name }}" data-address="{{ $hq->address }}">
                     <div class="ml-3">
                         <span class="block font-bold text-sm text-gray-900">{{ $hq->name }}</span>
                         <span class="block text-xs text-gray-500 mt-1">{{ $hq->address }}</span>
@@ -156,14 +178,24 @@
             <div class="flex gap-2">
                 <div class="w-1/2">
                     <select id="modal-input-date" class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 font-bold focus:ring-black">
-                        <option value="Hoy">Hoy</option>
-                        <option value="Mañana">Mañana</option>
+                        @php
+                            $startDay = $isStoreOpen ? 0 : 1; // Start from tomorrow if closed
+                            if ($daysAdvance < 1) $daysAdvance = 1; // At least allow today or tomorrow
+                        @endphp
+                        @for($i = $startDay; $i <= $daysAdvance; $i++)
+                            @php
+                                $date = \Carbon\Carbon::now()->addDays($i);
+                                $label = $i === 0 ? 'Hoy' : ($i === 1 ? 'Mañana' : $date->format('d/m/Y'));
+                            @endphp
+                            <option value="{{ $label }}">{{ $label }}</option>
+                        @endfor
                     </select>
                 </div>
                 <div class="w-1/2">
                     <select id="modal-input-time" class="w-full border-gray-200 rounded-xl text-sm bg-gray-50 font-bold focus:ring-black">
-                        <option value="Lo antes posible">Lo antes posible</option>
-                        <option value="Tarde (2:00pm - 6:00pm)">Tarde (2:00pm - 6:00pm)</option>
+                        @foreach($timeSlots as $slot)
+                            <option value="{{ $slot }}">{{ $slot }}</option>
+                        @endforeach
                     </select>
                 </div>
             </div>
@@ -184,6 +216,7 @@
             <select id="modal-invoice-type" onchange="toggleInvoiceModalFields(this.value)" class="w-full border-gray-200 rounded-xl text-sm mb-4 focus:ring-black">
                 <option value="boleta">Boleta con DNI</option>
                 <option value="factura">Factura</option>
+                <option value="ninguno">Sin comprobante (Solo Ticket interno)</option>
             </select>
 
             <!-- Boleta Fields -->
@@ -230,6 +263,11 @@
                     <label class="block text-xs font-medium text-gray-500 mb-1">Dirección</label>
                     <input type="text" id="modal-factura-dir" class="w-full border-gray-200 rounded-xl text-sm focus:ring-black">
                 </div>
+            </div>
+
+            <!-- Ninguno Fields -->
+            <div id="modal-fields-ninguno" class="hidden space-y-4">
+                <p class="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">Se generará únicamente un ticket de venta interno (no válido para crédito fiscal). Recomendado para regalos.</p>
             </div>
         </div>
         <div class="p-5 border-t border-gray-100">
@@ -279,6 +317,13 @@
 <!-- MAIN PAGE -->
 <div class="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8" id="checkout-root">
     
+    @if(!$isStoreOpen)
+        <div class="mb-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded shadow-sm" role="alert">
+            <p class="font-bold">¡La tienda se encuentra cerrada!</p>
+            <p>Nuestro horario de atención es de {{ \Carbon\Carbon::parse($openTime)->format('h:i A') }} a {{ \Carbon\Carbon::parse($closeTime)->format('h:i A') }}. Tu pedido será programado para el día siguiente o cuando volvamos a abrir.</p>
+        </div>
+    @endif
+    
     @if(session('error'))
         <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
             <span class="block sm:inline">{{ session('error') }}</span>
@@ -299,6 +344,11 @@
         <h2 class="hidden md:block text-red-600 font-extrabold text-xl tracking-tighter">GOURMETICA</h2>
     </div>
 
+    @php
+        $selectedHqId = session('selected_headquarter_id');
+        $selectedHq = $selectedHqId ? $headquarters->firstWhere('id', $selectedHqId) : $headquarters->first();
+    @endphp
+
     <form action="{{ route('orders.store') }}" method="POST" id="checkout-form">
         @csrf
         <input type="hidden" name="culqi_token" id="culqi_token">
@@ -306,7 +356,7 @@
         <input type="hidden" name="izipay_transaction_uuid" id="izipay_transaction_uuid">
         
         <input type="hidden" name="shipping_type" id="form_shipping_type" value="pickup">
-        <input type="hidden" name="headquarter_id" id="form_pickup_hq" value="{{ session('selected_headquarter_id') ?? $headquarters->first()->id ?? '' }}">
+        <input type="hidden" name="headquarter_id" id="form_pickup_hq" value="{{ $selectedHq->id ?? '' }}">
         <input type="hidden" name="latitude" id="form_latitude">
         <input type="hidden" name="longitude" id="form_longitude">
         <input type="hidden" name="address" id="form_delivery_address">
@@ -333,8 +383,8 @@
                     <div class="flex gap-4">
                         <div class="mt-1"><svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg></div>
                         <div class="flex-1 pr-16">
-                            <p class="text-sm font-bold text-gray-900" id="main-preview-shipping-title">Recojo en Tienda: {{ $headquarters->first()->name ?? 'SELECCIONE' }}</p>
-                            <p class="text-xs text-gray-500 mt-1" id="main-preview-shipping-desc">{{ $headquarters->first()->address ?? 'Elige local' }}</p>
+                            <p class="text-sm font-bold text-gray-900" id="main-preview-shipping-title">Recojo en Tienda: {{ $selectedHq->name ?? 'SELECCIONE' }}</p>
+                            <p class="text-xs text-gray-500 mt-1" id="main-preview-shipping-desc">{{ $selectedHq->address ?? 'Elige local' }}</p>
                         </div>
                     </div>
                     <button type="button" onclick="openModal('modal-location')" class="absolute top-5 right-6 text-sm font-bold text-red-600 hover:underline">Cambiar</button>
@@ -1017,6 +1067,8 @@
     function toggleInvoiceModalFields(type) {
         document.getElementById('modal-fields-boleta').style.display = type === 'boleta' ? 'block' : 'none';
         document.getElementById('modal-fields-factura').style.display = type === 'factura' ? 'block' : 'none';
+        const ningunoEl = document.getElementById('modal-fields-ninguno');
+        if(ningunoEl) ningunoEl.style.display = type === 'ninguno' ? 'block' : 'none';
     }
 
     function saveBillingModal() {
@@ -1025,9 +1077,11 @@
         if(type === 'boleta') {
             const doc = document.getElementById('modal-boleta-doc').value;
             document.getElementById('main-preview-billing').innerText = `Boleta - Doc: ${doc || 'Pendiente'}`;
-        } else {
+        } else if(type === 'factura') {
             const ruc = document.getElementById('modal-factura-ruc').value;
             document.getElementById('main-preview-billing').innerText = `Factura - RUC: ${ruc || 'Pendiente'}`;
+        } else {
+            document.getElementById('main-preview-billing').innerText = `Sin comprobante (Ticket interno)`;
         }
         closeModal();
     }
@@ -1037,6 +1091,11 @@
         document.getElementById('summary-delivery').innerText = selectedDeliveryPrice === 0 ? 'S/ 0.00' : `S/ ${selectedDeliveryPrice.toFixed(2)}`;
         document.getElementById('summary-total').innerText = `S/ ${finalTotal.toFixed(2)}`;
         document.getElementById('btn-total').innerText = `S/ ${finalTotal.toFixed(2)}`;
+
+        // Re-render IZIPAY to update the total amount securely
+        if (izipayFormLoaded) {
+            loadIzipayForm();
+        }
     }
 
     // Extra switches
@@ -1076,7 +1135,7 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
                         || '{{ csrf_token() }}',
                 },
-                body: JSON.stringify({ email: emailValue }),
+                body: JSON.stringify({ email: emailValue, delivery_price: selectedDeliveryPrice }),
             });
 
             const data = await response.json();

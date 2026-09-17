@@ -119,9 +119,9 @@
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Sede Preparadora</label>
                     @if(auth('admin')->user()->isSedeAdmin())
                         <input type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-400 outline-none" value="{{ auth('admin')->user()->headquarter->name }}" readonly disabled>
-                        <input type="hidden" name="headquarter_id" value="{{ auth('admin')->user()->headquarter_id }}">
+                        <input type="hidden" name="headquarter_id" id="modalHeadquarterSelect" value="{{ auth('admin')->user()->headquarter_id }}">
                     @else
-                        <select name="headquarter_id" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all cursor-pointer">
+                        <select name="headquarter_id" id="modalHeadquarterSelect" onchange="onHeadquarterChange()" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all cursor-pointer">
                             @foreach($headquarters as $hq)
                                 <option value="{{ $hq->id }}">{{ $hq->name }}</option>
                             @endforeach
@@ -187,12 +187,60 @@
 <script>
     let productIndex = 0;
     
-    // Dump product details in JS object
-    const productsList = [
+    // Dump product details with headquarters pricing and availability
+    const productsData = [
         @foreach($products as $product)
-        { id: {{ $product->id }}, name: "{{ $product->name }}", price: {{ $product->base_price }} },
+        {
+            id: {{ $product->id }},
+            name: "{{ addslashes($product->name) }}",
+            base_price: {{ (float)$product->base_price }},
+            headquarters: {
+                @foreach($product->headquarters as $hq)
+                {{ $hq->id }}: {
+                    price: {{ $hq->pivot->price !== null ? (float)$hq->pivot->price : (float)$product->base_price }},
+                    is_available: {{ $hq->pivot->is_available ? 'true' : 'false' }},
+                    stock: {{ (int)$hq->pivot->stock }}
+                },
+                @endforeach
+            }
+        },
         @endforeach
     ];
+
+    function getSelectedHeadquarterId() {
+        const el = document.getElementById('modalHeadquarterSelect');
+        return el ? el.value : null;
+    }
+
+    function getProductPrice(prod, hqId) {
+        if (hqId && prod.headquarters && prod.headquarters[hqId]) {
+            return prod.headquarters[hqId].price;
+        }
+        return prod.base_price;
+    }
+
+    function getProductOptionsHtml(selectedId = null) {
+        const hqId = getSelectedHeadquarterId();
+        return productsData
+            .filter(p => !hqId || !p.headquarters[hqId] || p.headquarters[hqId].is_available)
+            .map(p => {
+                const price = getProductPrice(p, hqId);
+                const selected = selectedId == p.id ? 'selected' : '';
+                return `<option value="${p.id}" data-price="${price}" ${selected}>${p.name} - S/ ${price.toFixed(2)}</option>`;
+            }).join('');
+    }
+
+    function onHeadquarterChange() {
+        // Re-render product selects in open rows
+        const selects = document.querySelectorAll('.select-product-input');
+        selects.forEach((select, idx) => {
+            const currentVal = select.value;
+            select.innerHTML = '<option value="" disabled selected>Selecciona producto</option>' + getProductOptionsHtml(currentVal);
+            select.value = currentVal;
+            updateRowTotal(select, idx);
+        });
+        calculateGrandTotal();
+    }
 
     function openDirectSaleModal() {
         document.getElementById('directSaleModal').classList.remove('hidden');
@@ -215,7 +263,7 @@
                     <label class="block text-[10px] text-slate-500 uppercase mb-1">Producto</label>
                     <select name="products[${productIndex}][id]" onchange="updateRowTotal(this, ${productIndex})" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:border-brand-primary outline-none transition-colors cursor-pointer select-product-input">
                         <option value="" disabled selected>Selecciona producto</option>
-                        ${productsList.map(p => `<option value="${p.id}" data-price="${p.price}">${p.name} - S/ ${p.price.toFixed(2)}</option>`).join('')}
+                        ${getProductOptionsHtml()}
                     </select>
                 </div>
                 

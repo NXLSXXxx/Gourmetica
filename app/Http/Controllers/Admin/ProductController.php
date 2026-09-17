@@ -7,10 +7,39 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $products = \App\Models\Product::with('category')->paginate(15);
-        return view('admin.products.index', compact('products'));
+        $user = auth('admin')->user();
+        $headquarters = \App\Models\Headquarter::where('is_active', true)->get();
+
+        $selectedHqId = $request->input('hq_id');
+        if (($user && ($user->isSedeAdmin() || $user->isCajero())) && !$selectedHqId) {
+            $selectedHqId = $user->headquarter_id;
+        }
+
+        $query = \App\Models\Product::with(['category', 'headquarters']);
+
+        if ($request->filled('category')) {
+            $query->where('category_id', $request->category);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($selectedHqId && $request->has('only_available')) {
+            $query->whereHas('headquarters', function($q) use ($selectedHqId) {
+                $q->where('headquarters.id', $selectedHqId)
+                  ->where('headquarter_product.is_available', true);
+            });
+        }
+
+        $products = $query->paginate(15);
+        return view('admin.products.index', compact('products', 'headquarters', 'selectedHqId'));
     }
 
     public function create()
@@ -29,8 +58,9 @@ class ProductController extends Controller
             'base_price' => 'required|numeric',
             'description' => 'nullable|string',
             'image' => 'nullable|image|max:2048',
-            'headquarters' => 'required|array',
-            'headquarters.*.stock' => 'required|integer|min:0',
+            'headquarters' => 'nullable|array',
+            'headquarters.*.is_available' => 'nullable',
+            'headquarters.*.stock' => 'nullable|integer|min:0',
             'headquarters.*.price' => 'nullable|numeric|min:0',
             'options' => 'nullable|array',
             'options.*.name' => 'required_with:options|string|max:255',
@@ -56,11 +86,19 @@ class ProductController extends Controller
             'is_active' => true,
         ]);
 
-        foreach ($validated['headquarters'] as $hqId => $data) {
-            $product->headquarters()->attach($hqId, [
-                'stock' => $data['stock'],
-                'price' => $data['price'] ?? $validated['base_price'],
-            ]);
+        if ($request->has('headquarters') && is_array($request->headquarters)) {
+            $syncData = [];
+            foreach ($request->headquarters as $hqId => $data) {
+                $isAvailable = isset($data['is_available']) && ($data['is_available'] == '1' || $data['is_available'] === 'on');
+                $price = (isset($data['price']) && $data['price'] !== '') ? (float)$data['price'] : null;
+                $stock = isset($data['stock']) ? (int)$data['stock'] : 0;
+                $syncData[$hqId] = [
+                    'is_available' => $isAvailable,
+                    'stock' => $stock,
+                    'price' => $price,
+                ];
+            }
+            $product->headquarters()->sync($syncData);
         }
 
         if ($request->has('options') && is_array($request->options)) {
@@ -118,8 +156,9 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'image' => 'nullable|image|max:2048',
             'is_active' => 'boolean',
-            'headquarters' => 'required|array',
-            'headquarters.*.stock' => 'required|integer|min:0',
+            'headquarters' => 'nullable|array',
+            'headquarters.*.is_available' => 'nullable',
+            'headquarters.*.stock' => 'nullable|integer|min:0',
             'headquarters.*.price' => 'nullable|numeric|min:0',
             'options' => 'nullable|array',
             'options.*.name' => 'required_with:options|string|max:255',
@@ -147,14 +186,20 @@ class ProductController extends Controller
             'is_active' => $request->has('is_active'),
         ]);
 
-        $syncData = [];
-        foreach ($validated['headquarters'] as $hqId => $data) {
-            $syncData[$hqId] = [
-                'stock' => $data['stock'],
-                'price' => $data['price'] ?? $validated['base_price'],
-            ];
+        if ($request->has('headquarters') && is_array($request->headquarters)) {
+            $syncData = [];
+            foreach ($request->headquarters as $hqId => $data) {
+                $isAvailable = isset($data['is_available']) && ($data['is_available'] == '1' || $data['is_available'] === 'on');
+                $price = (isset($data['price']) && $data['price'] !== '') ? (float)$data['price'] : null;
+                $stock = isset($data['stock']) ? (int)$data['stock'] : 0;
+                $syncData[$hqId] = [
+                    'is_available' => $isAvailable,
+                    'stock' => $stock,
+                    'price' => $price,
+                ];
+            }
+            $product->headquarters()->sync($syncData);
         }
-        $product->headquarters()->sync($syncData);
 
         if ($request->has('options') && is_array($request->options)) {
             $product->options()->delete();

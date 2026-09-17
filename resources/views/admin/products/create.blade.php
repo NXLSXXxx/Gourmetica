@@ -79,18 +79,24 @@
                 <div class="space-y-6">
                     @foreach($headquarters as $hq)
                     <div class="p-6 bg-slate-800/50 rounded-xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                        <div>
-                            <h3 class="font-bold text-white">{{ $hq->name }}</h3>
-                            <p class="text-xs text-slate-500">{{ $hq->address }}</p>
+                        <div class="flex items-center gap-4">
+                            <label class="relative flex items-center cursor-pointer" title="Habilitar/Deshabilitar venta en esta sede">
+                                <input type="checkbox" name="headquarters[{{ $hq->id }}][is_available]" value="1" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                            </label>
+                            <div>
+                                <h3 class="font-bold text-white">{{ $hq->name }}</h3>
+                                <p class="text-xs text-slate-500">{{ $hq->address }}</p>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-4">
+                        <div class="flex flex-wrap items-center gap-4">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Stock</label>
                                 <input type="number" name="headquarters[{{ $hq->id }}][stock]" value="0" min="0" class="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none">
                             </div>
                             <div>
-                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Precio Específico (Opcional)</label>
-                                <input type="number" step="0.01" name="headquarters[{{ $hq->id }}][price]" class="w-32 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" placeholder="S/ 0.00">
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Precio en Sede (S/)</label>
+                                <input type="number" step="0.01" name="headquarters[{{ $hq->id }}][price]" class="w-36 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" placeholder="Usa precio base">
                             </div>
                         </div>
                     </div>

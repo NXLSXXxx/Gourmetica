@@ -110,6 +110,7 @@ class OrderController extends Controller
 
         $order = \App\Models\Order::create([
             'user_id' => auth()->id(),
+            'customer_name' => $request->first_name . ' ' . $request->last_name,
             'headquarter_id' => $request->headquarter_id,
             'total' => $finalTotal,
             'status' => 'pending',
@@ -118,6 +119,16 @@ class OrderController extends Controller
             'payment_status' => 'pending',
             'delivery_zone_id' => $deliveryZoneId,
             'delivery_price' => $deliveryPrice,
+            'delivery_date' => $request->delivery_date,
+            'delivery_time' => $request->delivery_time,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'invoice_type' => $request->invoice_type,
+            'invoice_document' => $request->invoice_type === 'factura' ? $request->factura_ruc : $request->boleta_doc,
+            'is_gift' => $request->has('is_gift') || $request->input('is_gift') == '1' || $request->input('is_gift') === 'on',
+            'has_card' => $request->has('has_tarjeta') || $request->input('has_tarjeta') == '1' || $request->input('has_tarjeta') === 'on',
+            'has_dedication' => $request->has('has_dedicatoria_torta') || $request->input('has_dedicatoria_torta') == '1' || $request->input('has_dedicatoria_torta') === 'on',
+            'notes' => $request->input('dedicatoria_torta'),
         ]);
 
         if ($request->payment_method === 'culqi' && $request->culqi_token) {
@@ -182,6 +193,9 @@ class OrderController extends Controller
         foreach ($cart as $item) {
             $total += $item['price'] * $item['quantity'];
         }
+        
+        $deliveryPrice = (float) $request->input('delivery_price', 0);
+        $total += $deliveryPrice;
 
         $email = $request->input('email', 'guest@gourmetica.com.pe');
 

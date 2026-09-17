@@ -154,6 +154,37 @@
         </div>
         @endif
 
+        <!-- Horarios de Venta y Delivery Settings -->
+        <div class="bg-brand-primary p-8 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden">
+            <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3 text-brand-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Horarios de Venta y Delivery
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Hora de Apertura</label>
+                    <input type="time" name="store_open_time" value="{{ $settings['store_open_time'] }}" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Hora de Cierre</label>
+                    <input type="time" name="store_close_time" value="{{ $settings['store_close_time'] }}" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Días de Anticipación para Delivery</label>
+                    <input type="number" min="0" max="30" name="delivery_days_advance" value="{{ $settings['delivery_days_advance'] }}" placeholder="Ej: 2" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all">
+                    <p class="text-xs text-slate-500 mt-1">Cuántos días hacia adelante se pueden programar pedidos. (0 = Solo hoy).</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Horarios de Entrega (Separados por coma)</label>
+                    <input type="text" name="delivery_time_slots" value="{{ $settings['delivery_time_slots'] }}" placeholder="Ej: Lo antes posible, Mañana (9am-1pm), Tarde" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all">
+                    <p class="text-xs text-slate-500 mt-1">Estos textos aparecerán en el selector de hora del checkout.</p>
+                </div>
+            </div>
+            <p class="mt-4 text-xs text-slate-500 italic">Si un cliente intenta comprar fuera del horario de apertura/cierre, el botón "Lo antes posible" no estará disponible y solo podrá programar para días posteriores.</p>
+        </div>
+
         <div class="flex justify-end">
             <button type="submit" class="px-12 py-4 rounded-xl bg-brand-secondary text-brand-dark font-bold hover:scale-105 transition-transform shadow-lg">
                 GUARDAR CAMBIOS

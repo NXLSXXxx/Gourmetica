@@ -56,10 +56,13 @@
 
         <div class="flex-1 overflow-y-auto p-4 space-y-3" id="productList">
             @foreach($products as $product)
-            <div class="product-item bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center gap-3 cursor-pointer hover:border-brand-primary/50 transition-colors" data-name="{{ htmlspecialchars(strtolower($product->name)) }}" onclick="addToCart({{ $product->id }}, {{ json_encode($product->name) }}, {{ $product->base_price }})">
+            @php
+                $sedePrice = $product->getPriceForHeadquarter($hqId);
+            @endphp
+            <div class="product-item bg-slate-900/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center gap-3 cursor-pointer hover:border-brand-primary/50 transition-colors" data-name="{{ htmlspecialchars(strtolower($product->name)) }}" onclick="addToCart({{ $product->id }}, {{ json_encode($product->name) }}, {{ $sedePrice }})">
                 <div>
                     <h4 class="font-medium text-white text-sm">{{ $product->name }}</h4>
-                    <span class="text-white font-bold text-sm">S/ {{ number_format($product->base_price, 2) }}</span>
+                    <span class="text-white font-bold text-sm">S/ {{ number_format($sedePrice, 2) }}</span>
                 </div>
                 <button class="bg-slate-800 hover:bg-slate-700 text-white rounded p-1">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>

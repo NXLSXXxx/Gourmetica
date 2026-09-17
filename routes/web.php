@@ -37,8 +37,46 @@ Route::post('/select-headquarter', function(\Illuminate\Http\Request $request) {
     $request->validate([
         'headquarter_id' => 'required|exists:headquarters,id'
     ]);
-    session()->put('selected_headquarter_id', $request->headquarter_id);
-    return response()->json(['success' => true]);
+    $newHqId = (int)$request->headquarter_id;
+    session()->put('selected_headquarter_id', $newHqId);
+
+    // If cart has items, update prices according to new headquarter and check availability
+    $cart = session()->get('cart', []);
+    $removedCount = 0;
+    $updatedCart = [];
+
+    foreach ($cart as $key => $item) {
+        $product = \App\Models\Product::find($item['id']);
+        if (!$product || !$product->isAvailableInHeadquarter($newHqId)) {
+            $removedCount++;
+            continue; // Not available in new sede
+        }
+
+        $optionValues = isset($item['option_ids']) && is_array($item['option_ids'])
+            ? \App\Models\ProductOptionValue::whereIn('id', array_values($item['option_ids']))->get()
+            : collect([]);
+        $additionalPrice = $optionValues->sum('price_modifier');
+
+        $sedePrice = $product->getPriceForHeadquarter($newHqId);
+        $item['price'] = $sedePrice + $additionalPrice;
+        $item['headquarter_id'] = $newHqId;
+        $updatedCart[$key] = $item;
+    }
+
+    session()->put('cart', $updatedCart);
+
+    $message = 'Sede actualizada.';
+    if ($removedCount > 0) {
+        $message .= " Se retiraron {$removedCount} producto(s) del carrito no disponibles en esta sede.";
+    }
+
+    session()->flash('info', $message);
+
+    return response()->json([
+        'success' => true,
+        'message' => $message,
+        'removed_count' => $removedCount
+    ]);
 })->name('select-headquarter');
 Route::get('/locations', [LocationController::class, 'index'])->name('shop.locations');
 Route::get('/about', function () {

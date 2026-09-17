@@ -41,9 +41,30 @@
                     {{ $product->description }}
                 </p>
 
+                <!-- Sede availability info -->
+                @if($selected_headquarter)
+                <div class="mb-6 flex items-center gap-2 text-xs text-gray-500 bg-white p-3 rounded-2xl border border-gray-100 shadow-xs">
+                    <span class="w-2 h-2 rounded-full {{ $isAvailableInSede ? 'bg-emerald-500' : 'bg-red-500' }}"></span>
+                    <span>Sede actual: <strong class="text-brand-secondary">{{ $selected_headquarter->name }}</strong></span>
+                    <button type="button" onclick="openSelectHeadquarterModal()" class="text-brand-primary underline ml-auto font-bold cursor-pointer">
+                        Cambiar sede
+                    </button>
+                </div>
+                @endif
+
+                @if(!$isAvailableInSede)
+                <div class="p-4 mb-8 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-sm">
+                    <p class="font-bold mb-1">⚠️ Producto no disponible en esta sede</p>
+                    <p class="text-xs text-amber-700">Este producto no se encuentra a la venta en la sede seleccionada. Puedes cambiar de sede para verificar si está disponible en otro de nuestros locales.</p>
+                    <button type="button" onclick="openSelectHeadquarterModal()" class="mt-3 px-4 py-2 bg-amber-800 text-white rounded-xl text-xs font-bold hover:bg-amber-900 transition-colors">
+                        Elegir otra sede
+                    </button>
+                </div>
+                @endif
+
                 <div class="mb-10">
                     <span class="text-4xl font-serif font-bold text-brand-primary" id="display-price">
-                        S/ {{ number_format($product->base_price, 2) }}
+                        S/ {{ number_format($sedePrice, 2) }}
                     </span>
                     <span class="text-gray-400 text-sm ml-2" id="price-label">Precio</span>
                 </div>
@@ -51,7 +72,7 @@
                 <form action="{{ route('cart.add') }}" method="POST" id="add-to-cart-form">
                     @csrf
                     <input type="hidden" name="product_id" value="{{ $product->id }}">
-                    <input type="hidden" name="base_price" id="base_price" value="{{ $product->base_price }}">
+                    <input type="hidden" name="base_price" id="base_price" value="{{ $sedePrice }}">
 
                     @foreach($product->options as $option)
                     <div class="mb-8">
@@ -71,7 +92,7 @@
                                     <div class="flex justify-between items-center w-full">
                                         <span class="text-sm font-bold text-brand-primary">{{ $value->value }}</span>
                                         <span class="text-xs font-bold text-brand-secondary">
-                                            S/ {{ number_format($product->base_price + $value->price_modifier, 2) }}
+                                            S/ {{ number_format($sedePrice + $value->price_modifier, 2) }}
                                         </span>
                                     </div>
                                 </div>
@@ -87,8 +108,8 @@
                             <input type="number" name="quantity" id="quantity" value="1" min="1" class="w-12 text-center font-bold text-brand-primary bg-transparent border-none outline-none focus:ring-0">
                             <button type="button" onclick="changeQty(1)" class="p-2 text-gray-400 hover:text-brand-primary">+</button>
                         </div>
-                        <button type="submit" class="flex-1 btn-premium py-5 text-lg shadow-xl shadow-brand-primary/10">
-                            AÑADIR AL CARRITO
+                        <button type="submit" {{ !$isAvailableInSede ? 'disabled' : '' }} class="flex-1 btn-premium py-5 text-lg shadow-xl shadow-brand-primary/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                            {{ $isAvailableInSede ? 'AÑADIR AL CARRITO' : 'NO DISPONIBLE EN ESTA SEDE' }}
                         </button>
                     </div>
                 </form>

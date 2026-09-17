@@ -29,6 +29,10 @@ class SettingController extends Controller
             'nakama_api_url' => Setting::get('nakama_api_url', 'http://localhost/public'),
             'nakama_api_key' => Setting::get('nakama_api_key', ''),
             'nakama_enabled' => Setting::get('nakama_enabled', '0'),
+            'store_open_time' => Setting::get('store_open_time', '09:00'),
+            'store_close_time' => Setting::get('store_close_time', '20:00'),
+            'delivery_days_advance' => Setting::get('delivery_days_advance', '2'),
+            'delivery_time_slots' => Setting::get('delivery_time_slots', 'Lo antes posible, Tarde (2:00pm - 6:00pm)'),
         ];
 
         return view('admin.settings.index', compact('settings'));
@@ -45,11 +49,15 @@ class SettingController extends Controller
             'company_address',
             'contact_whatsapp',
             'contact_email',
-            'contact_phone'
+            'contact_phone',
+            'store_open_time',
+            'store_close_time',
+            'delivery_days_advance',
+            'delivery_time_slots'
         ];
 
         if (!auth('admin')->user()->isIngeniero()) {
-            // General admin can only update company and contact settings
+            // General admin can only update company, contact and store schedule settings
             $requestData = $request->only($allowedKeys);
         } else {
             // Engineer can update everything

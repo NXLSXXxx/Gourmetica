@@ -16,7 +16,7 @@ class Headquarter extends Model
     public function products()
     {
         return $this->belongsToMany(Product::class)
-                    ->withPivot('stock', 'price')
+                    ->withPivot('stock', 'price', 'is_available')
                     ->withTimestamps();
     }
 

@@ -31,7 +31,7 @@ class SaleController extends Controller
             $q->where('slug', 'cliente');
         })->get();
 
-        $products = \App\Models\Product::where('is_active', true)->get();
+        $products = \App\Models\Product::with('headquarters')->where('is_active', true)->get();
 
         return view('admin.sales.index', compact('sales', 'headquarters', 'customers', 'products'));
     }
@@ -52,11 +52,12 @@ class SaleController extends Controller
             abort(403, 'No tienes permiso para registrar una venta en esta sede.');
         }
 
-        // Calculate direct total
+        // Calculate direct total using sede-specific prices
         $total = 0;
         foreach ($request->products as $pInput) {
             $product = \App\Models\Product::findOrFail($pInput['id']);
-            $total += $product->base_price * (int)$pInput['quantity'];
+            $productPrice = $product->getPriceForHeadquarter($request->headquarter_id);
+            $total += $productPrice * (int)$pInput['quantity'];
         }
 
         // Generate series and correlative based on document type
@@ -118,12 +119,6 @@ class SaleController extends Controller
     public function liveOrders(Request $request)
     {
         $user = auth('admin')->user();
-        
-        $products = \App\Models\Product::with(['category', 'headquarters', 'options.values'])
-            ->where('is_active', true)
-            ->get();
-
-        $categories = \App\Models\Category::all();
 
         $hqQuery = \App\Models\Headquarter::where('is_active', true);
         if ($user->isSedeAdmin() || $user->isCajero()) {
@@ -131,17 +126,27 @@ class SaleController extends Controller
         }
         $headquarters = $hqQuery->get();
 
+        // Get live orders for the headquarter
+        $hqId = $request->input('hq_id');
+        if (!$hqId) {
+            $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : ($headquarters->first()->id ?? 1);
+        }
+
+        $products = \App\Models\Product::with(['category', 'headquarters', 'options.values'])
+            ->where('is_active', true)
+            ->whereHas('headquarters', function($q) use ($hqId) {
+                $q->where('headquarters.id', $hqId)
+                  ->where('headquarter_product.is_available', true);
+            })
+            ->get();
+
+        $categories = \App\Models\Category::all();
+
         $customers = \App\Models\User::whereHas('role', function($q) {
             $q->where('slug', 'cliente');
         })->get();
 
         $defaultCustomer = $customers->first();
-
-        // Get live orders for the headquarter
-        $hqId = $request->input('hq_id');
-        if (!$hqId) {
-            $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : $headquarters->first()->id;
-        }
         
         if ($request->ajax()) {
             return response()->json($this->getLiveOrdersData($hqId));
