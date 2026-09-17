@@ -210,15 +210,20 @@
                 <span class="text-brand-primary">cerca de ti</span>
             </h2>
             
-            <p class="text-lg md:text-xl text-white/70 mb-12 max-w-2xl mx-auto font-medium leading-relaxed">
-                Más de <strong class="text-white">10 casas Gourmetica</strong> en la ciudad, listas para recibirte con el aroma del pan recién horneado y el sabor que enamora.
+            @php
+                $hqCount = $global_headquarters->count();
+                $citiesList = $global_headquarters->pluck('city')->filter()->unique()->implode(', ');
+            @endphp
+
+            <p class="text-lg md:text-xl text-white/70 mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
+                Contamos con <strong class="text-white">{{ $hqCount }} {{ $hqCount === 1 ? 'casa Gourmetica' : 'casas Gourmetica' }}</strong>{{ $citiesList ? " en {$citiesList}" : ' en la ciudad' }}, listas para recibirte con el aroma del pan recién horneado y el sabor que enamora.
             </p>
 
             <!-- Stats Row -->
-            <div class="flex flex-wrap items-center justify-center gap-8 md:gap-16 mb-14">
+            <div class="flex flex-wrap items-center justify-center gap-8 md:gap-16 mb-12">
                 <div class="text-center">
-                    <span class="block text-4xl md:text-5xl font-black text-brand-primary">10+</span>
-                    <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">Sedes</span>
+                    <span class="block text-4xl md:text-5xl font-black text-brand-primary">{{ $hqCount }}</span>
+                    <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">{{ $hqCount === 1 ? 'Sede' : 'Sedes' }}</span>
                 </div>
                 <div class="w-px h-12 bg-white/20 hidden md:block"></div>
                 <div class="text-center">
@@ -231,6 +236,35 @@
                     <span class="text-white/50 text-xs uppercase tracking-widest font-bold mt-1 block">Artesanal</span>
                 </div>
             </div>
+
+            <!-- Real-time Headquarters Cards Grid -->
+            @if($global_headquarters->count() > 0)
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-{{ min(4, max(2, $global_headquarters->count())) }} gap-4 mb-12 text-left">
+                @foreach($global_headquarters as $hq)
+                <div class="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 group">
+                    <div class="flex items-start justify-between gap-3 mb-2">
+                        <div class="w-8 h-8 rounded-xl bg-brand-primary/20 flex items-center justify-center text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        </div>
+                        <span class="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Abierto</span>
+                    </div>
+                    <h3 class="text-white font-bold text-base group-hover:text-brand-primary transition-colors leading-tight mb-1">{{ $hq->name }}</h3>
+                    <p class="text-white/60 text-xs line-clamp-2 mb-3 leading-relaxed">{{ $hq->address }}</p>
+                    @if($hq->city)
+                        <div class="flex items-center gap-1.5 text-[11px] text-white/50 mb-3">
+                            <span>📍 {{ $hq->city }}</span>
+                            @if($hq->phone)
+                                <span>• 📞 {{ $hq->phone }}</span>
+                            @endif
+                        </div>
+                    @endif
+                    <button onclick="setHeadquarter({{ $hq->id }})" type="button" class="w-full text-center py-2 px-3 rounded-xl bg-white/10 hover:bg-brand-primary text-white text-xs font-bold transition-all cursor-pointer">
+                        {{ session('selected_headquarter_id') == $hq->id ? '✓ Sede Seleccionada' : 'Elegir esta sede' }}
+                    </button>
+                </div>
+                @endforeach
+            </div>
+            @endif
             
             <!-- CTA Buttons -->
             <div class="flex flex-col sm:flex-row items-center justify-center gap-4">

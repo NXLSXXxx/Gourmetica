@@ -46,10 +46,14 @@
         </p>
 
         <!-- Stats -->
+        @php
+            $locCount = $locations->count();
+            $cities = $locations->pluck('city')->filter()->unique();
+        @endphp
         <div class="flex flex-wrap items-center justify-center gap-8 md:gap-16 mt-12">
             <div class="text-center">
-                <span class="block text-4xl font-black text-brand-primary">10+</span>
-                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Sedes</span>
+                <span class="block text-4xl font-black text-brand-primary">{{ $locCount }}</span>
+                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">{{ $locCount === 1 ? 'Sede' : 'Sedes' }}</span>
             </div>
             <div class="w-px h-10 bg-white/20 hidden md:block"></div>
             <div class="text-center">
@@ -58,8 +62,8 @@
             </div>
             <div class="w-px h-10 bg-white/20 hidden md:block"></div>
             <div class="text-center">
-                <span class="block text-4xl font-black text-brand-primary">Lima</span>
-                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Ciudad</span>
+                <span class="block text-4xl font-black text-brand-primary">{{ $cities->count() > 0 ? $cities->count() : '1' }}</span>
+                <span class="text-white/40 text-[10px] uppercase tracking-widest font-bold">{{ $cities->count() > 1 ? 'Ciudades' : 'Ciudad' }}</span>
             </div>
         </div>
     </div>
