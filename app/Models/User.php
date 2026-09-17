@@ -46,6 +46,16 @@ class User extends Authenticatable
         return $this->belongsToMany(Product::class, 'favorites')->withTimestamps();
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
+
     /**
      * Helpers
      */

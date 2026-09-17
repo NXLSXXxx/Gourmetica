@@ -125,6 +125,7 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
     })->name('admin.migrate');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('intranet.dashboard');
     Route::get('/clients', [ClientController::class, 'index'])->name('admin.clients');
+    Route::get('/clients/{id}', [ClientController::class, 'show'])->name('admin.clients.show');
     Route::resource('/products', ProductController::class)->names('admin.products');
     Route::resource('/categories', CategoryController::class)->names('admin.categories');
     Route::resource('/headquarters', \App\Http\Controllers\Admin\HeadquarterController::class)->names('admin.headquarters');
