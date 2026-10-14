@@ -8,7 +8,8 @@ use App\Models\Role;
 use App\Models\Headquarter;
 use App\Models\Order;
 use App\Models\Sale;
-use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class VerifyP2Command extends Command
 {
@@ -24,7 +25,7 @@ class VerifyP2Command extends Command
      *
      * @var string
      */
-    protected $description = 'Certifica la matriz de autorización y aislamiento por sede de la Fase P2';
+    protected $description = 'Certifica la matriz de autorización y aislamiento por sede de la Fase P2 con aislamiento transaccional estricto';
 
     /**
      * Execute the console command.
@@ -32,58 +33,85 @@ class VerifyP2Command extends Command
     public function handle()
     {
         $this->info("===============================================================================");
-        $this->info("   GOURMETICA - CERTIFICACION DE FASE P2 (ROLES, PERMISOS Y AISLAMIENTO)       ");
+        $this->info("   GOURMETICA - CERTIFICACION DE FASE P2 (AISLAMIENTO TRANSACCIONAL)           ");
         $this->info("===============================================================================");
-
-        // 1. Asegurar rol cajero en caso no exista
-        $cajeroRole = Role::firstOrCreate(['slug' => 'cajero'], ['name' => 'Cajero']);
-
-        // 2. Obtener usuarios clave
-        $adminGeneral = User::whereHas('role', fn($q) => $q->where('slug', 'admin_general'))->first();
-        $ingeniero    = User::whereHas('role', fn($q) => $q->where('slug', 'ingeniero'))->first();
-        $adminSede    = User::whereHas('role', fn($q) => $q->where('slug', 'admin_sede'))->first();
-
-        if (!$adminGeneral || !$ingeniero) {
-            $this->error("Faltan usuarios base de prueba (Admin General o Ingeniero).");
-            return 1;
-        }
-
-        // 3. Obtener o crear dos sedes
-        $hq1 = Headquarter::find(1) ?: Headquarter::first();
-        $hq2 = Headquarter::where('id', '!=', $hq1->id)->first() ?: Headquarter::create([
-            'name' => 'Sede Secundaria Certificacion',
-            'is_active' => true,
-        ]);
-
-        $orderS1 = null;
-        $orderS2 = null;
-        $saleS1 = null;
-        $saleS2 = null;
-        $cajeroSede1 = null;
 
         $passed = 0;
         $total = 0;
 
+        // 1. Snapshot del estado de la base de datos previo a la ejecución
+        $beforeSnapshot = $this->captureDatabaseState();
+
+        // 2. Iniciar transacción aislada: cualquier inserción o cambio será revertido (rollback)
+        DB::beginTransaction();
+
         try {
-            // Crear usuario cajero asignado a Sede 1 para la prueba
-            $cajeroSede1 = User::create([
-                'name' => 'Cajero Audit S1',
-                'email' => 'cajero_cert_' . time() . '@gourmetica.pe',
+            // 3. Obtener o crear roles transaccionales (se descartarán en el rollback)
+            $roleAdmin = Role::where('slug', 'admin_general')->first() 
+                ?: Role::create(['name' => 'Admin General Audit', 'slug' => 'admin_general']);
+
+            $roleSede = Role::where('slug', 'admin_sede')->first() 
+                ?: Role::create(['name' => 'Admin Sede Audit', 'slug' => 'admin_sede']);
+
+            $roleCajero = Role::where('slug', 'cajero')->first() 
+                ?: Role::create(['name' => 'Cajero Audit', 'slug' => 'cajero']);
+
+            $roleIngeniero = Role::where('slug', 'ingeniero')->first() 
+                ?: Role::create(['name' => 'Ingeniero Audit', 'slug' => 'ingeniero']);
+
+            // 4. Crear sedes de prueba estrictamente efímeras dentro de la transacción
+            $hq1 = Headquarter::create([
+                'name' => 'Audit Sede 1 ' . uniqid(),
+                'address' => 'Calle Auditoria 1',
+                'city' => 'Lima',
+                'is_active' => true,
+            ]);
+
+            $hq2 = Headquarter::create([
+                'name' => 'Audit Sede 2 ' . uniqid(),
+                'address' => 'Calle Auditoria 2',
+                'city' => 'Lima',
+                'is_active' => true,
+            ]);
+
+            // 5. Crear usuarios de prueba estrictamente efímeros (NUNCA reutiliza ni modifica usuarios reales)
+            $adminGeneral = User::create([
+                'name' => 'Audit Admin General',
+                'email' => 'audit_admingen_' . uniqid() . '@audit.test',
                 'password' => bcrypt('password123'),
-                'role_id' => $cajeroRole->id,
+                'role_id' => $roleAdmin->id,
+                'headquarter_id' => null,
+            ]);
+
+            $adminSede = User::create([
+                'name' => 'Audit Admin Sede 2',
+                'email' => 'audit_adminsede2_' . uniqid() . '@audit.test',
+                'password' => bcrypt('password123'),
+                'role_id' => $roleSede->id,
+                'headquarter_id' => $hq2->id,
+            ]);
+
+            $cajeroSede1 = User::create([
+                'name' => 'Audit Cajero Sede 1',
+                'email' => 'audit_cajero1_' . uniqid() . '@audit.test',
+                'password' => bcrypt('password123'),
+                'role_id' => $roleCajero->id,
                 'headquarter_id' => $hq1->id,
             ]);
 
-            // Asignar Admin Sede a Sede 2 si no tiene sede asignada
-            if ($adminSede && !$adminSede->headquarter_id) {
-                $adminSede->update(['headquarter_id' => $hq2->id]);
-            }
+            $ingeniero = User::create([
+                'name' => 'Audit Ingeniero',
+                'email' => 'audit_ing_' . uniqid() . '@audit.test',
+                'password' => bcrypt('password123'),
+                'role_id' => $roleIngeniero->id,
+                'headquarter_id' => null,
+            ]);
 
-            // Crear pedidos de prueba en cada sede
+            // 6. Crear pedidos efímeros dentro de la transacción
             $orderS1 = Order::create([
                 'user_id' => $adminGeneral->id,
                 'headquarter_id' => $hq1->id,
-                'customer_name' => 'Cliente Sede 1',
+                'customer_name' => 'Cliente Audit Sede 1',
                 'total' => 45.00,
                 'status' => 'pending',
                 'payment_method' => 'Efectivo',
@@ -93,20 +121,20 @@ class VerifyP2Command extends Command
             $orderS2 = Order::create([
                 'user_id' => $adminGeneral->id,
                 'headquarter_id' => $hq2->id,
-                'customer_name' => 'Cliente Sede 2',
+                'customer_name' => 'Cliente Audit Sede 2',
                 'total' => 60.00,
                 'status' => 'pending',
                 'payment_method' => 'Efectivo',
                 'payment_status' => 'paid',
             ]);
 
-            // Crear ventas de prueba en cada sede
+            // 7. Crear ventas efímeras dentro de la transacción
             $saleS1 = Sale::create([
                 'user_id' => $adminGeneral->id,
                 'headquarter_id' => $hq1->id,
                 'document_type' => '03',
                 'series' => 'B001',
-                'correlative' => 9991,
+                'correlative' => 99991,
                 'total' => 45.00,
                 'status' => 'completed',
                 'sunat_status' => 'pending',
@@ -117,7 +145,7 @@ class VerifyP2Command extends Command
                 'headquarter_id' => $hq2->id,
                 'document_type' => '03',
                 'series' => 'B001',
-                'correlative' => 9992,
+                'correlative' => 99992,
                 'total' => 60.00,
                 'status' => 'completed',
                 'sunat_status' => 'pending',
@@ -202,14 +230,12 @@ class VerifyP2Command extends Command
             }
 
             // 1.9 Aislamiento de Admin Sede 2 respecto a Sede 1
-            if ($adminSede) {
-                $total++;
-                if (!$adminSede->can('view', $orderS1)) {
-                    $passed++;
-                    $this->line(" [OK] Admin Sede 2 NO puede consultar Pedido de Sede 1 -> 403 Forbidden");
-                } else {
-                    $this->error(" [FALLO] Admin Sede 2 pudo ver Pedido de Sede 1");
-                }
+            $total++;
+            if (!$adminSede->can('view', $orderS1)) {
+                $passed++;
+                $this->line(" [OK] Admin Sede 2 NO puede consultar Pedido de Sede 1 -> 403 Forbidden");
+            } else {
+                $this->error(" [FALLO] Admin Sede 2 pudo ver Pedido de Sede 1");
             }
 
             // 1.10 Admin General tiene visibilidad de todas las sedes
@@ -224,10 +250,10 @@ class VerifyP2Command extends Command
             $this->newLine();
             $this->line("<fg=yellow;options=bold>--- 2. MATRIZ DE AUTORIZACION POR ROL (FAIL-CLOSED) ---</>");
 
-            // 2.1 Configuracion general
+            // 2.1 Configuración general
             $total++;
             $cfgAdminOk = $adminGeneral->can('manage-settings');
-            $cfgSedeDeny = $adminSede ? !$adminSede->can('manage-settings') : true;
+            $cfgSedeDeny = !$adminSede->can('manage-settings');
             $cfgCajeroDeny = !$cajeroSede1->can('manage-settings');
             $cfgIngDeny = !$ingeniero->can('manage-settings');
 
@@ -238,10 +264,10 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Matriz de Configuracion General no cumple");
             }
 
-            // 2.2 Gestion de usuarios
+            // 2.2 Gestión de usuarios
             $total++;
             $usrAdminOk = $adminGeneral->can('manage-users');
-            $usrSedeDeny = $adminSede ? !$adminSede->can('manage-users') : true;
+            $usrSedeDeny = !$adminSede->can('manage-users');
             $usrCajeroDeny = !$cajeroSede1->can('manage-users');
             $usrIngDeny = !$ingeniero->can('manage-users');
 
@@ -252,10 +278,10 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Matriz de Gestion de Usuarios no cumple");
             }
 
-            // 2.3 Gestion de sedes y delivery
+            // 2.3 Gestión de sedes y delivery
             $total++;
             $hqAdminOk = $adminGeneral->can('manage-headquarters') && $adminGeneral->can('manage-delivery-zones');
-            $hqSedeDeny = $adminSede ? (!$adminSede->can('manage-headquarters') && !$adminSede->can('manage-delivery-zones')) : true;
+            $hqSedeDeny = !$adminSede->can('manage-headquarters') && !$adminSede->can('manage-delivery-zones');
             $hqCajeroDeny = !$cajeroSede1->can('manage-headquarters') && !$cajeroSede1->can('manage-delivery-zones');
             $hqIngDeny = !$ingeniero->can('manage-headquarters') && !$ingeniero->can('manage-delivery-zones');
 
@@ -266,11 +292,11 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Matriz de Gestion de Sedes y Delivery no cumple");
             }
 
-            // 2.4 Backups y logs tecnicos
+            // 2.4 Backups y logs técnicos
             $total++;
             $techIngOk = $ingeniero->can('manage-technical');
             $techAdminDeny = !$adminGeneral->can('manage-technical');
-            $techSedeDeny = $adminSede ? !$adminSede->can('manage-technical') : true;
+            $techSedeDeny = !$adminSede->can('manage-technical');
             $techCajeroDeny = !$cajeroSede1->can('manage-technical');
 
             if ($techIngOk && $techAdminDeny && $techSedeDeny && $techCajeroDeny) {
@@ -280,11 +306,11 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Matriz de Backups y Logs no cumple");
             }
 
-            // 2.5 Auditoria tecnica
+            // 2.5 Auditoría técnica
             $total++;
             $auditIngOk = $ingeniero->can('view-audits');
             $auditAdminDeny = !$adminGeneral->can('view-audits');
-            $auditSedeDeny = $adminSede ? !$adminSede->can('view-audits') : true;
+            $auditSedeDeny = !$adminSede->can('view-audits');
             $auditCajeroDeny = !$cajeroSede1->can('view-audits');
 
             if ($auditIngOk && $auditAdminDeny && $auditSedeDeny && $auditCajeroDeny) {
@@ -306,20 +332,52 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Ingeniero tiene acceso indebido a pedidos o caja");
             }
 
-            $this->newLine();
-            $this->info("===============================================================================");
-            $this->info("   RESULTADO DE CERTIFICACION: {$passed} / {$total} VERIFICACIONES EXITOSAS     ");
-            $this->info("===============================================================================");
-
         } finally {
-            // Limpieza segura de registros temporales creados para la prueba
-            if ($orderS1) { $orderS1->delete(); }
-            if ($orderS2) { $orderS2->delete(); }
-            if ($saleS1) { $saleS1->delete(); }
-            if ($saleS2) { $saleS2->delete(); }
-            if ($cajeroSede1) { $cajeroSede1->delete(); }
+            // Revertir absolutamente todas las inserciones y cambios dentro de la transacción
+            DB::rollBack();
         }
 
+        // 8. Verificación de Integridad: Comparar Snapshot post-ejecución con el pre-ejecución
+        $this->newLine();
+        $this->line("<fg=yellow;options=bold>--- 3. VERIFICACION DE AISLAMIENTO E INTEGRIDAD DE BD ---</>");
+        $afterSnapshot = $this->captureDatabaseState();
+        $isClean = ($beforeSnapshot === $afterSnapshot);
+
+        $total++;
+        if ($isClean) {
+            $passed++;
+            $this->line(" [OK] Cero Modificaciones Permanentes: Snapshot pre/post identico al 100% (Rollback verificado)");
+        } else {
+            $this->error(" [FALLO] Se detectaron alteraciones residuales en las tablas tras la ejecucion");
+        }
+
+        $this->newLine();
+        $this->info("===============================================================================");
+        $this->info("   RESULTADO DE CERTIFICACION: {$passed} / {$total} VERIFICACIONES EXITOSAS     ");
+        $this->info("===============================================================================");
+
         return $passed === $total ? 0 : 1;
+    }
+
+    /**
+     * Captura el estado y conteo de filas de las tablas clave para auditar integridad.
+     */
+    protected function captureDatabaseState(): array
+    {
+        $tables = ['roles', 'users', 'headquarters', 'orders', 'sales', 'order_items', 'audits'];
+        $state = [];
+
+        foreach ($tables as $table) {
+            if (Schema::hasTable($table)) {
+                $count = DB::table($table)->count();
+                $maxId = DB::table($table)->max('id') ?? 0;
+                $state[$table] = [
+                    'count' => (int) $count,
+                    'max_id' => (int) $maxId,
+                ];
+            }
+        }
+
+        return $state;
     }
 }
