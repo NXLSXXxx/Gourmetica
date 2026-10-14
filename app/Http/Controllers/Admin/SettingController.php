@@ -14,7 +14,7 @@ class SettingController extends Controller
         \Illuminate\Support\Facades\Gate::authorize('manage-settings');
 
         $settings = [
-            'sunat_ruc' => Setting::get('sunat_ruc', '20123456789'),
+            'sunat_ruc' => Setting::get('sunat_ruc', '10737725648'),
             'sunat_user' => Setting::get('sunat_user', 'MODDATOS'),
             'sunat_pass' => Setting::get('sunat_pass', 'MODDATOS'),
             'company_name' => Setting::get('company_name', 'GOURMETICA S.A.C.'),

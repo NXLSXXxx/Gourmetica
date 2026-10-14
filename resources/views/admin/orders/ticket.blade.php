@@ -57,7 +57,7 @@
         <h1>GOURMETICA</h1>
         <p>SEDE: {{ strtoupper($order->headquarter->name) }}</p>
         <p>{{ $order->headquarter->address }}</p>
-        <p>RUC: {{ \App\Models\Setting::get('sunat_ruc', '20123456789') }}</p>
+        <p>RUC: {{ \App\Models\Setting::get('sunat_ruc', '10737725648') }}</p>
     </div>
 
     <div class="info border-b">

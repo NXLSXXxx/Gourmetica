@@ -31,7 +31,7 @@ class SunatService
         
         $this->see->setService($isProduction ? 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService' : 'https://demo-ose.nubefact.com/ol-ti-itcpe/billService');
         
-        $ruc = Setting::get('sunat_ruc', '20000000001');
+        $ruc = Setting::get('sunat_ruc', '10737725648');
         $user = Setting::get('sunat_user', 'MODDATOS');
         $pass = Setting::get('sunat_pass', 'MODDATOS');
         
@@ -40,7 +40,7 @@ class SunatService
 
     public function getCompany()
     {
-        $ruc = Setting::get('sunat_ruc', '20000000001');
+        $ruc = Setting::get('sunat_ruc', '10737725648');
         $name = Setting::get('company_name', 'GOURMETICA S.A.C.');
         $address = Setting::get('company_address', 'AV. LAS ARTES 123');
 
