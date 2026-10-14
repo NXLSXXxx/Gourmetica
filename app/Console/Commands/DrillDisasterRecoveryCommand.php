@@ -119,10 +119,23 @@ class DrillDisasterRecoveryCommand extends Command
 
         $backupFilePath = $this->option('backup-file');
         if (!empty($backupFilePath)) {
-            if (str_starts_with($backupFilePath, '~/')) {
+            $rawPath = $backupFilePath;
+            $candidates = [$rawPath];
+            if (str_starts_with($rawPath, '~/')) {
                 $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
                 if (!empty($home)) {
-                    $backupFilePath = rtrim($home, '/') . '/' . substr($backupFilePath, 2);
+                    $candidates[] = rtrim($home, '/') . '/' . substr($rawPath, 2);
+                }
+                $candidates[] = base_path($rawPath);
+                $candidates[] = base_path(substr($rawPath, 2));
+            }
+            $candidates[] = storage_path('app/backups/' . basename($rawPath));
+            $candidates[] = base_path(basename($rawPath));
+
+            foreach ($candidates as $cand) {
+                if (file_exists($cand)) {
+                    $backupFilePath = $cand;
+                    break;
                 }
             }
         }

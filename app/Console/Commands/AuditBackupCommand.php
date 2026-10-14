@@ -42,6 +42,13 @@ class AuditBackupCommand extends Command
         $defaultPath = $backupDir . '/backup_pre_merge_' . date('Ymd_His') . '.sql';
         $filePath = $this->option('output') ?: $defaultPath;
 
+        if (str_starts_with($filePath, '~/')) {
+            $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+            if (!empty($home)) {
+                $filePath = rtrim($home, '/') . '/' . substr($filePath, 2);
+            }
+        }
+
         $targetDir = dirname($filePath);
         if (!file_exists($targetDir)) {
             mkdir($targetDir, 0755, true);
