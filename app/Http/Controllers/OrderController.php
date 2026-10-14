@@ -143,13 +143,45 @@ class OrderController extends Controller
             }
         }
 
-        // Pago IZIPAY: verificar que el token del formulario sea válido
-        if ($request->payment_method === 'izipay' && $request->izipay_token) {
-            // El token de IZIPAY (kr-answer) fue validado en el frontend.
-            // Aquí marcamos el pedido como pagado y creamos la venta.
-            // Para extra seguridad se puede re-verificar el HMAC del kr-hash.
-            $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
-            \App\Models\Sale::createFromOrder($order);
+        // Pago IZIPAY: Verificación criptográfica obligatoria de la firma y monto del pago
+        if ($request->payment_method === 'izipay') {
+            $rawAnswer = $request->input('izipay_raw_answer');
+            $hash = $request->input('izipay_hash');
+
+            if (!empty($rawAnswer) && !empty($hash)) {
+                $izipay = new \App\Services\IzipayService();
+                $isSignatureValid = $izipay->verifyHmacAnswer($rawAnswer, $hash);
+
+                if ($isSignatureValid) {
+                    $answerData = json_decode($rawAnswer, true);
+                    $orderStatus = $answerData['orderStatus'] ?? '';
+                    $paidAmountInCents = (int) ($answerData['orderDetails']['orderTotalAmount'] ?? 0);
+                    $expectedAmountInCents = (int) round($finalTotal * 100);
+
+                    // Validar que el estado sea PAID y que el monto pagado coincida con el total calculado
+                    if ($orderStatus === 'PAID' && abs($paidAmountInCents - $expectedAmountInCents) <= 1) {
+                        $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+                        \App\Models\Sale::createFromOrder($order);
+                    } else {
+                        \Illuminate\Support\Facades\Log::warning('IZIPAY: Monto o estado inconsistente en checkout.', [
+                            'order_id' => $order->id,
+                            'status' => $orderStatus,
+                            'paid_cents' => $paidAmountInCents,
+                            'expected_cents' => $expectedAmountInCents
+                        ]);
+                    }
+                } else {
+                    \Illuminate\Support\Facades\Log::error('IZIPAY: Firma HMAC inválida en checkout. Posible manipulación de datos.', [
+                        'order_id' => $order->id,
+                        'user_id' => auth()->id()
+                    ]);
+                }
+            } else {
+                \Illuminate\Support\Facades\Log::warning('IZIPAY: Pedido recibido sin datos criptográficos de verificación.', [
+                    'order_id' => $order->id,
+                    'user_id' => auth()->id()
+                ]);
+            }
         }
 
         foreach ($cart as $item) {
@@ -194,7 +226,7 @@ class OrderController extends Controller
             $total += $item['price'] * $item['quantity'];
         }
         
-        $deliveryPrice = (float) $request->input('delivery_price', 0);
+        $deliveryPrice = max(0, (float) $request->input('delivery_price', 0));
         $total += $deliveryPrice;
 
         $email = $request->input('email', 'guest@gourmetica.com.pe');

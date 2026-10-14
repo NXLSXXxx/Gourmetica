@@ -97,29 +97,39 @@ class IzipayService
     }
 
     /**
-     * Verifica la firma HMAC-SHA256 del IPN/respuesta de IZIPAY.
-     * Protege contra falsificaciones en el callback del pago.
+     * Verifica la firma HMAC-SHA256 del IPN o respuesta de IZIPAY.
+     * En IZIPAY V4, la firma kr-hash se calcula con el HMAC-SHA256 del string JSON recibido en kr-answer.
      *
-     * @param array  $data      Datos recibidos del IPN (kr-answer, etc.)
-     * @param string $signature La firma recibida (kr-hash)
+     * @param array|string $data      Datos del IPN o string kr-answer
+     * @param string       $signature La firma recibida (kr-hash)
      * @return bool
      */
-    public function verifySignature(array $data, string $signature): bool
+    public function verifySignature($data, string $signature): bool
     {
-        if (empty($this->hmacSha256)) {
+        if (empty($this->hmacSha256) || empty($signature)) {
             return false;
         }
 
-        $content = '';
-        ksort($data);
-        foreach ($data as $key => $value) {
-            if (str_starts_with($key, 'kr-')) {
-                $content .= $value;
-            }
+        $content = is_array($data) ? ($data['kr-answer'] ?? '') : (string)$data;
+        if (empty($content)) {
+            return false;
         }
 
         $expectedSignature = hash_hmac('sha256', $content, $this->hmacSha256);
         return hash_equals($expectedSignature, $signature);
+    }
+
+    /**
+     * Verifica la respuesta embebida enviada por el frontend tras procesar el pago en IZIPAY.
+     */
+    public function verifyHmacAnswer(string $rawAnswer, string $hash): bool
+    {
+        if (empty($this->hmacSha256) || empty($rawAnswer) || empty($hash)) {
+            return false;
+        }
+
+        $expectedSignature = hash_hmac('sha256', $rawAnswer, $this->hmacSha256);
+        return hash_equals($expectedSignature, $hash);
     }
 
     public function getPublicKey(): string
