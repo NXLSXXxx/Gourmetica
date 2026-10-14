@@ -369,11 +369,14 @@ class VerifyP2Command extends Command
 
         foreach ($tables as $table) {
             if (Schema::hasTable($table)) {
-                $count = DB::table($table)->count();
-                $maxId = DB::table($table)->max('id') ?? 0;
+                $metrics = DB::table($table)
+                    ->selectRaw('COUNT(*) as total_rows, COALESCE(SUM(id), 0) as id_sum, COALESCE(MAX(id), 0) as max_id')
+                    ->first();
+
                 $state[$table] = [
-                    'count' => (int) $count,
-                    'max_id' => (int) $maxId,
+                    'count'  => (int) ($metrics->total_rows ?? 0),
+                    'id_sum' => (int) ($metrics->id_sum ?? 0),
+                    'max_id' => (int) ($metrics->max_id ?? 0),
                 ];
             }
         }

@@ -76,9 +76,13 @@ class VerifyP2CommandTest extends TestCase
         $tables = ['roles', 'users', 'headquarters', 'orders', 'sales', 'order_items', 'audits'];
         $beforeSnapshot = [];
         foreach ($tables as $table) {
+            $metrics = DB::table($table)
+                ->selectRaw('COUNT(*) as total_rows, COALESCE(SUM(id), 0) as id_sum, COALESCE(MAX(id), 0) as max_id')
+                ->first();
             $beforeSnapshot[$table] = [
-                'count' => DB::table($table)->count(),
-                'max_id' => DB::table($table)->max('id') ?? 0,
+                'count'  => (int) ($metrics->total_rows ?? 0),
+                'id_sum' => (int) ($metrics->id_sum ?? 0),
+                'max_id' => (int) ($metrics->max_id ?? 0),
             ];
         }
 
@@ -90,9 +94,13 @@ class VerifyP2CommandTest extends TestCase
         // 4. Capturar snapshot posterior a la ejecución
         $afterSnapshot = [];
         foreach ($tables as $table) {
+            $metrics = DB::table($table)
+                ->selectRaw('COUNT(*) as total_rows, COALESCE(SUM(id), 0) as id_sum, COALESCE(MAX(id), 0) as max_id')
+                ->first();
             $afterSnapshot[$table] = [
-                'count' => DB::table($table)->count(),
-                'max_id' => DB::table($table)->max('id') ?? 0,
+                'count'  => (int) ($metrics->total_rows ?? 0),
+                'id_sum' => (int) ($metrics->id_sum ?? 0),
+                'max_id' => (int) ($metrics->max_id ?? 0),
             ];
         }
 
