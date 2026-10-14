@@ -167,6 +167,15 @@ class SunatServiceTest extends TestCase
             'role_id' => $role->id,
         ]);
 
+        $cat = \App\Models\Category::create(['name' => 'Catering', 'slug' => 'catering']);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Banquete Empresarial',
+            'sku' => 'BANQ-001',
+            'base_price' => 200.00,
+            'is_active' => true,
+        ]);
+
         $order = Order::create([
             'user_id' => $user->id,
             'customer_name' => 'Corporacion Andina S.A.C.',
@@ -180,6 +189,13 @@ class SunatServiceTest extends TestCase
             'stock_decremented' => true,
         ]);
 
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 200.00,
+        ]);
+
         $sale = Sale::createFromOrder($order);
 
         $service = new SunatService();
@@ -191,5 +207,304 @@ class SunatServiceTest extends TestCase
         $this->assertEquals('20601234567', $invoice->getClient()->getNumDoc());
         $this->assertEquals('Corporacion Andina S.A.C.', $invoice->getClient()->getRznSocial());
         $this->assertEquals('SON DOSCIENTOS CON 00/100 SOLES', $invoice->getLegends()[0]->getValue());
+    }
+
+    /**
+     * Prueba que intentar generar una Factura (01) sin un RUC válido de 11 dígitos
+     * lance InvalidArgumentException y NUNCA use valores de respaldo ficticios.
+     */
+    public function test_factura_without_valid_11_digit_ruc_throws_exception_without_fictive_fallback(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => 'Empresa Sin RUC',
+            'email' => 'sinruc@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $cat = \App\Models\Category::create(['name' => 'Catering', 'slug' => 'catering']);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Coffee Break',
+            'sku' => 'CB-001',
+            'base_price' => 150.00,
+            'is_active' => true,
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'customer_name' => 'Empresa Sin RUC',
+            'headquarter_id' => $hq->id,
+            'total' => 150.00,
+            'status' => 'preparing',
+            'payment_method' => 'izipay',
+            'payment_status' => 'paid',
+            'invoice_type' => 'factura',
+            'invoice_document' => '12345678', // 8 dígitos (DNI, inválido para Factura tipo 01)
+            'stock_decremented' => true,
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 150.00,
+        ]);
+
+        $sale = Sale::createFromOrder($order);
+
+        $service = new SunatService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("No se puede emitir una Factura electrónica (tipo 01) sin un RUC válido de 11 dígitos");
+
+        $service->buildInvoice($sale);
+    }
+
+    /**
+     * Prueba que intentar generar una Factura (01) sin Razón Social lance InvalidArgumentException.
+     */
+    public function test_factura_without_business_name_throws_exception(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => '   ',
+            'email' => 'noname@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $cat = \App\Models\Category::create(['name' => 'Catering', 'slug' => 'catering']);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Coffee Break',
+            'sku' => 'CB-002',
+            'base_price' => 150.00,
+            'is_active' => true,
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'customer_name' => '   ',
+            'headquarter_id' => $hq->id,
+            'total' => 150.00,
+            'status' => 'preparing',
+            'payment_method' => 'izipay',
+            'payment_status' => 'paid',
+            'invoice_type' => 'factura',
+            'invoice_document' => '20601234567',
+            'stock_decremented' => true,
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 150.00,
+        ]);
+
+        $sale = Sale::createFromOrder($order);
+
+        $service = new SunatService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("No se puede emitir una Factura electrónica sin la Razón Social");
+
+        $service->buildInvoice($sale);
+    }
+
+    /**
+     * Prueba la regla tributaria SUNAT para Boleta de Venta:
+     * Si el importe es igual o mayor a S/ 700.00, es obligatoria la identificación del comprador.
+     */
+    public function test_boleta_equal_or_greater_than_700_without_identification_throws_exception(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => 'Cliente Anonimo',
+            'email' => 'anon@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $cat = \App\Models\Category::create(['name' => 'Eventos', 'slug' => 'eventos']);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Buffet Completo Premium',
+            'sku' => 'BUF-001',
+            'base_price' => 750.00,
+            'is_active' => true,
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'customer_name' => 'Cliente Anonimo',
+            'headquarter_id' => $hq->id,
+            'total' => 750.00,
+            'status' => 'preparing',
+            'payment_method' => 'izipay',
+            'payment_status' => 'paid',
+            'invoice_type' => 'boleta',
+            'invoice_document' => null, // Sin documento
+            'stock_decremented' => true,
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 750.00,
+        ]);
+
+        $sale = Sale::createFromOrder($order);
+
+        $service = new SunatService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("SUNAT exige identificación obligatoria (DNI o RUC) para boletas de venta con importe igual o superior a S/ 700.00");
+
+        $service->buildInvoice($sale);
+    }
+
+    /**
+     * Prueba que una boleta menor a S/ 700.00 sin documento sea aceptada legalmente con tipo 0 'CLIENTES VARIOS'.
+     */
+    public function test_boleta_under_700_allows_clientes_varios_without_document(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => 'Comensal en Mesa',
+            'email' => 'comensal@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $cat = \App\Models\Category::create(['name' => 'Pastelería', 'slug' => 'pasteleria']);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Tarta de Fresa',
+            'sku' => 'TF-001',
+            'base_price' => 45.00,
+            'is_active' => true,
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'customer_name' => 'Comensal en Mesa',
+            'headquarter_id' => $hq->id,
+            'total' => 45.00,
+            'status' => 'preparing',
+            'payment_method' => 'efectivo',
+            'payment_status' => 'paid',
+            'invoice_type' => 'boleta',
+            'invoice_document' => null,
+            'stock_decremented' => true,
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 45.00,
+        ]);
+
+        $sale = Sale::createFromOrder($order);
+
+        $service = new SunatService();
+        $invoice = $service->buildInvoice($sale);
+
+        $this->assertEquals('03', $invoice->getTipoDoc());
+        $this->assertEquals('0', $invoice->getClient()->getTipoDoc());
+        $this->assertEquals('00000000', $invoice->getClient()->getNumDoc());
+        $this->assertEquals('Comensal en Mesa', $invoice->getClient()->getRznSocial());
+    }
+
+    /**
+     * Prueba que intentar generar un comprobante para una venta sin ítems lance InvalidArgumentException,
+     * impidiendo líneas genéricas ficticias como 'SERV-001'.
+     */
+    public function test_sale_without_items_throws_exception_preventing_fictive_line(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => 'Cliente Directo',
+            'email' => 'direct@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $sale = Sale::create([
+            'user_id' => $user->id,
+            'headquarter_id' => $hq->id,
+            'document_type' => '03',
+            'series' => 'B001',
+            'correlative' => 999,
+            'total' => 50.00,
+            'status' => 'completed',
+            'sunat_status' => 'pending',
+            'order_id' => null, // Sin pedido asociado ni ítems
+        ]);
+
+        $service = new SunatService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("no tiene productos o ítems registrados. SUNAT prohíbe emitir comprobantes sin líneas de detalle de productos reales");
+
+        $service->buildInvoice($sale);
+    }
+
+    /**
+     * Prueba que declareToSunat preserve la venta en estado PENDIENTE_CORRECCION
+     * con el detalle de la infracción y sin enviar datos corruptos o ficticios a SUNAT.
+     */
+    public function test_declare_to_sunat_preserves_sale_in_pendiente_correccion_on_validation_failure(): void
+    {
+        $role = Role::create(['name' => 'Cliente', 'slug' => 'cliente']);
+        $hq = Headquarter::create(['name' => 'Sede Central', 'address' => 'Av. Larco 500', 'city' => 'Lima', 'is_active' => true]);
+        $user = User::create([
+            'name' => 'Empresa RUC Trunco',
+            'email' => 'trunco@test.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $role->id,
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'customer_name' => 'Empresa RUC Trunco',
+            'headquarter_id' => $hq->id,
+            'total' => 100.00,
+            'status' => 'preparing',
+            'payment_method' => 'izipay',
+            'payment_status' => 'paid',
+            'invoice_type' => 'factura',
+            'invoice_document' => '123', // RUC trunco (inválido para Factura)
+            'stock_decremented' => true,
+        ]);
+
+        $sale = Sale::createFromOrder($order);
+
+        $adminRole = Role::create(['name' => 'Admin General', 'slug' => 'admin_general']);
+        $admin = User::create([
+            'name' => 'Admin Test',
+            'email' => 'admintest@gourmetica.local',
+            'password' => bcrypt('secret'),
+            'role_id' => $adminRole->id,
+        ]);
+
+        $this->actingAs($admin, 'admin');
+
+        $controller = new \App\Http\Controllers\Admin\SaleController();
+        $controller->declareToSunat($sale->id, new SunatService());
+
+        $sale->refresh();
+        $this->assertEquals('PENDIENTE_CORRECCION', $sale->sunat_status);
+        $this->assertStringContainsString('Rechazo de validación tributaria', $sale->sunat_response);
+        $this->assertStringContainsString('sin un RUC válido de 11 dígitos', $sale->sunat_response);
     }
 }

@@ -22,7 +22,7 @@ class ReconcileTransactionsCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Ejecuta una conciliación financiera y operativa integral entre pedidos, pagos, ventas y correlativos fiscales';
+    protected $description = 'Ejecuta una conciliación transaccional interna entre pedidos, pagos registrados, ventas y correlativos fiscales';
 
     /**
      * Execute the console command.
@@ -30,8 +30,14 @@ class ReconcileTransactionsCommand extends Command
     public function handle()
     {
         $this->info("===============================================================================");
-        $this->info("   GOURMETICA - CONCILIACION FINANCIERA Y OPERATIVA (P3.4 RECONCILIATION)       ");
+        $this->info("   GOURMETICA - CONCILIACION INTERNA Y TRAZABILIDAD DE PASARELAS (P3.4)         ");
         $this->info("===============================================================================");
+
+        $this->line(" <fg=gray>[ALCANCE]: Esta auditoría certifica la consistencia transaccional interna, integridad de firmas,</>");
+        $this->line(" <fg=gray>coincidencia de montos de payloads registrados y correlatividad fiscal de Gourmetica.</>");
+        $this->line(" <fg=gray>(Nota: La conciliación bancaria y liquidación de fondos externa de terceros requiere el cotejo</>");
+        $this->line(" <fg=gray>independiente con extractos bancarios o reportes de liquidación provistos por el adquirente).</>");
+        $this->newLine();
 
         $hqId = $this->option('headquarter_id');
         $orderQuery = Order::query();
@@ -214,7 +220,7 @@ class ReconcileTransactionsCommand extends Command
 
         $this->newLine();
         $this->info("===============================================================================");
-        $this->info("   CONCILIACION EXITOSA: CERO DISCREPANCIAS ENTRE PEDIDOS, PASARELAS Y VENTAS   ");
+        $this->info("   CONCILIACION INTERNA EXITOSA: CONSISTENCIA DE PEDIDOS, PASARELAS Y VENTAS   ");
         $this->info("===============================================================================");
 
         return 0;

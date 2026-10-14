@@ -49,6 +49,8 @@ class SaleController extends Controller
             'products' => 'required|array|min:1',
             'products.*.id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
+            'customer_name' => 'nullable|string|max:255',
+            'invoice_document' => 'nullable|string|max:20',
         ]);
 
         Gate::authorize('create', [Sale::class, (int)$request->headquarter_id]);
@@ -77,19 +79,52 @@ class SaleController extends Controller
 
         $correlative = $lastSale ? $lastSale->correlative + 1 : 1;
 
-        // Create Sale
-        Sale::create([
-            'user_id' => $request->user_id,
-            'headquarter_id' => $request->headquarter_id,
-            'document_type' => $documentType,
-            'series' => $series,
-            'correlative' => $correlative,
-            'total' => $total,
-            'status' => 'completed',
-            'sunat_status' => 'pending',
-        ]);
+        // Generar pedido y venta vinculada en una sola transacción atómica
+        $sale = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $total, $documentType, $series, $correlative) {
+            $customerUser = \App\Models\User::find($request->user_id);
+            $customerName = trim((string)$request->input('customer_name')) ?: ($customerUser->name ?? 'Cliente Directo');
+            $invoiceDoc = trim((string)$request->input('invoice_document')) ?: null;
 
-        return back()->with('success', 'Venta física registrada exitosamente.');
+            $order = \App\Models\Order::create([
+                'user_id' => $request->user_id,
+                'customer_name' => $customerName,
+                'headquarter_id' => $request->headquarter_id,
+                'total' => $total,
+                'status' => 'delivered',
+                'address' => 'Venta Directa - Sede',
+                'payment_method' => 'Efectivo',
+                'payment_status' => 'paid',
+                'invoice_type' => $documentType === '01' ? 'factura' : 'boleta',
+                'invoice_document' => $invoiceDoc,
+                'stock_decremented' => true,
+            ]);
+
+            foreach ($request->products as $pInput) {
+                $product = \App\Models\Product::findOrFail($pInput['id']);
+                $productPrice = $product->getPriceForHeadquarter($request->headquarter_id);
+                $qty = (int)$pInput['quantity'];
+
+                $order->items()->create([
+                    'product_id' => $product->id,
+                    'quantity' => $qty,
+                    'price' => $productPrice,
+                ]);
+            }
+
+            return Sale::create([
+                'user_id' => $request->user_id,
+                'headquarter_id' => $request->headquarter_id,
+                'document_type' => $documentType,
+                'series' => $series,
+                'correlative' => $correlative,
+                'total' => $total,
+                'status' => 'completed',
+                'sunat_status' => 'pending',
+                'order_id' => $order->id,
+            ]);
+        });
+
+        return back()->with('success', 'Venta física registrada exitosamente con detalle de productos.');
     }
 
     public function declareToSunat($id, SunatService $sunatService)
@@ -102,7 +137,6 @@ class SaleController extends Controller
         }
 
         try {
-            // Simulation mode for now
             $result = $sunatService->generateInvoice($sale);
 
             if ($result->isSuccess()) {
@@ -118,6 +152,12 @@ class SaleController extends Controller
                 ]);
                 return back()->with('error', 'Error SUNAT: ' . $result->getError()->getMessage());
             }
+        } catch (\InvalidArgumentException $e) {
+            $sale->update([
+                'sunat_status' => 'PENDIENTE_CORRECCION',
+                'sunat_response' => 'Rechazo de validación tributaria: ' . $e->getMessage(),
+            ]);
+            return back()->with('error', 'Validación tributaria rechazada: ' . $e->getMessage());
         } catch (\Exception $e) {
             return back()->with('error', 'Error en el proceso: ' . $e->getMessage());
         }
@@ -315,6 +355,11 @@ class SaleController extends Controller
                     'sunat_response' => $result->getError()->getMessage(),
                 ]);
             }
+        } catch (\InvalidArgumentException $e) {
+            $sale->update([
+                'sunat_status' => 'PENDIENTE_CORRECCION',
+                'sunat_response' => 'Rechazo de validación tributaria: ' . $e->getMessage(),
+            ]);
         } catch (\Exception $e) {
             $sale->update([
                 'sunat_status' => 'PENDIENTE_OSE',

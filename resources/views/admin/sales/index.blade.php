@@ -142,10 +142,26 @@
                 <!-- Tipo Comprobante -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Tipo de Comprobante</label>
-                    <select name="document_type" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all cursor-pointer">
+                    <select name="document_type" id="modalDocumentType" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all cursor-pointer">
                         <option value="03">Boleta de Venta (B001)</option>
                         <option value="01">Factura de Venta (F001)</option>
                     </select>
+                </div>
+            </div>
+
+            <!-- Datos Tributarios del Comprador -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                        Razón Social / Denominación <span class="text-xs text-brand-secondary font-normal">(obligatorio en Factura)</span>
+                    </label>
+                    <input type="text" name="customer_name" id="inputCustomerName" placeholder="Ej: EMPRESA COMERCIAL S.A.C." class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                        Documento Tributario <span class="text-xs text-brand-secondary font-normal">(RUC 11 dígitos para Factura / DNI para Boleta)</span>
+                    </label>
+                    <input type="text" name="invoice_document" id="inputInvoiceDocument" maxlength="11" placeholder="Ej: 20601234567 o 70001234" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all text-sm">
                 </div>
             </div>
 

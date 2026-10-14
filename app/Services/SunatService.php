@@ -76,7 +76,7 @@ class SunatService
 
     public function getClient($sale): \Greenter\Model\Client\Client
     {
-        $isFactura = ($sale->document_type ?? '01') === '01';
+        $isFactura = ($sale->document_type ?? '03') === '01';
         $doc = null;
         $name = null;
 
@@ -89,36 +89,57 @@ class SunatService
             $name = $sale->user->name;
         }
 
-        if (!$doc && $sale->user && !empty($sale->user->phone)) {
-            $cleaned = preg_replace('/[^0-9]/', '', $sale->user->phone);
-            if (strlen($cleaned) === 8 || strlen($cleaned) === 11) {
-                $doc = $cleaned;
-            }
-        }
-
         $client = new \Greenter\Model\Client\Client();
 
         if ($isFactura) {
-            // Factura (01) exige obligatoriamente RUC de 11 dígitos
-            $ruc = (!empty($doc) && strlen($doc) === 11) ? $doc : '20405060701';
+            // Validación estricta de FACTURA (01):
+            // Requiere obligatoriamente un RUC válido de 11 dígitos numéricos
+            $docCleaned = preg_replace('/[^0-9]/', '', (string)$doc);
+            if (empty($docCleaned) || strlen($docCleaned) !== 11) {
+                throw new \InvalidArgumentException(
+                    "No se puede emitir una Factura electrónica (tipo 01) sin un RUC válido de 11 dígitos. Documento recibido: '" . ($doc ?? 'vacío') . "'. Corrija los datos tributarios del cliente antes de declarar ante SUNAT."
+                );
+            }
+
+            if (empty(trim((string)$name))) {
+                throw new \InvalidArgumentException(
+                    "No se puede emitir una Factura electrónica sin la Razón Social o denominación del comprador."
+                );
+            }
+
             $client->setTipoDoc('6')
-                ->setNumDoc($ruc)
-                ->setRznSocial($name ?: 'EMPRESA CLIENTE S.A.C.');
+                ->setNumDoc($docCleaned)
+                ->setRznSocial(trim($name));
         } else {
             // Boleta de Venta (03)
-            if (!empty($doc) && strlen($doc) === 8) {
-                $client->setTipoDoc('1')
-                    ->setNumDoc($doc)
-                    ->setRznSocial($name ?: 'CLIENTE FINAL');
-            } elseif (!empty($doc) && strlen($doc) === 11) {
-                $client->setTipoDoc('6')
-                    ->setNumDoc($doc)
-                    ->setRznSocial($name ?: 'CLIENTE FINAL');
+            $docCleaned = preg_replace('/[^0-9]/', '', (string)$doc);
+            $saleTotal = (float)$sale->total;
+
+            if (!empty($docCleaned)) {
+                if (strlen($docCleaned) === 8) {
+                    $client->setTipoDoc('1') // DNI
+                        ->setNumDoc($docCleaned)
+                        ->setRznSocial(trim($name) ?: 'CLIENTE FINAL');
+                } elseif (strlen($docCleaned) === 11) {
+                    $client->setTipoDoc('6') // RUC en boleta
+                        ->setNumDoc($docCleaned)
+                        ->setRznSocial(trim($name) ?: 'CLIENTE FINAL');
+                } else {
+                    throw new \InvalidArgumentException(
+                        "El documento proporcionado '{$doc}' no es válido para Boleta de Venta. Debe ser un DNI de 8 dígitos o RUC de 11 dígitos."
+                    );
+                }
             } else {
-                // Sin documento o clientes varios (permitido legalmente por SUNAT para boletas < S/ 700)
+                // Sin documento: Permitido por SUNAT únicamente para importes menores a S/ 700.00
+                if ($saleTotal >= 700.00) {
+                    throw new \InvalidArgumentException(
+                        "SUNAT exige identificación obligatoria (DNI o RUC) para boletas de venta con importe igual o superior a S/ 700.00 (Monto de la venta: S/ " . number_format($saleTotal, 2) . ")."
+                    );
+                }
+
                 $client->setTipoDoc('0')
                     ->setNumDoc('00000000')
-                    ->setRznSocial($name ?: 'CLIENTES VARIOS');
+                    ->setRznSocial(trim($name) ?: 'CLIENTES VARIOS');
             }
         }
 
@@ -150,89 +171,70 @@ class SunatService
         $order = $sale->order;
         $items = ($order && $order->items) ? $order->items()->with('product')->get() : collect();
 
+        if ($items->isEmpty()) {
+            throw new \InvalidArgumentException(
+                "La venta #{$sale->id} no tiene productos o ítems registrados. SUNAT prohíbe emitir comprobantes sin líneas de detalle de productos reales."
+            );
+        }
+
         $totalGravada = 0;
         $totalIgv = 0;
 
-        if ($items->isNotEmpty()) {
-            foreach ($items as $item) {
-                $qty = max(1, (float)$item->quantity);
-                $linePriceWithIgv = (float)$item->price;
-                $lineTotal = round($linePriceWithIgv * $qty, 2);
+        foreach ($items as $item) {
+            $qty = max(1, (float)$item->quantity);
+            $linePriceWithIgv = (float)$item->price;
+            $lineTotal = round($linePriceWithIgv * $qty, 2);
 
-                $unitValue = round($linePriceWithIgv / 1.18, 4);
-                $itemValorVenta = round($unitValue * $qty, 2);
-                $itemIgv = round($lineTotal - $itemValorVenta, 2);
+            $unitValue = round($linePriceWithIgv / 1.18, 4);
+            $itemValorVenta = round($unitValue * $qty, 2);
+            $itemIgv = round($lineTotal - $itemValorVenta, 2);
 
-                $prodCode = $item->product ? ($item->product->sku ?: 'P' . str_pad($item->product_id, 4, '0', STR_PAD_LEFT)) : 'P001';
-                $prodName = $item->product ? $item->product->name : 'Producto Gourmetica';
-
-                $detail = new SaleDetail();
-                $detail->setCodProducto($prodCode)
-                    ->setUnidad('NIU')
-                    ->setCantidad($qty)
-                    ->setDescripcion($prodName)
-                    ->setMtoValorUnitario($unitValue)
-                    ->setMtoPrecioUnitario($linePriceWithIgv)
-                    ->setMtoValorVenta($itemValorVenta)
-                    ->setTipAfeIgv('10') // Gravado - Operación Onerosa
-                    ->setIgv($itemIgv)
-                    ->setTotalImpuestos($itemIgv)
-                    ->setMtoBaseIgv($itemValorVenta)
-                    ->setPorcentajeIgv(18.00);
-
-                $details[] = $detail;
-                $totalGravada += $itemValorVenta;
-                $totalIgv += $itemIgv;
-            }
-
-            // Servicio de entrega / delivery si existe
-            if ($order->delivery_price && (float)$order->delivery_price > 0) {
-                $delPriceWithIgv = (float)$order->delivery_price;
-                $delUnitValue = round($delPriceWithIgv / 1.18, 4);
-                $delValorVenta = round($delUnitValue, 2);
-                $delIgv = round($delPriceWithIgv - $delValorVenta, 2);
-
-                $delDetail = new SaleDetail();
-                $delDetail->setCodProducto('SERV-DELIVERY')
-                    ->setUnidad('ZZ')
-                    ->setCantidad(1)
-                    ->setDescripcion('Servicio de Delivery')
-                    ->setMtoValorUnitario($delUnitValue)
-                    ->setMtoPrecioUnitario($delPriceWithIgv)
-                    ->setMtoValorVenta($delValorVenta)
-                    ->setTipAfeIgv('10')
-                    ->setIgv($delIgv)
-                    ->setTotalImpuestos($delIgv)
-                    ->setMtoBaseIgv($delValorVenta)
-                    ->setPorcentajeIgv(18.00);
-
-                $details[] = $delDetail;
-                $totalGravada += $delValorVenta;
-                $totalIgv += $delIgv;
-            }
-        } else {
-            // Fallback para ventas directas sin orden detallada
-            $total = (float)$sale->total;
-            $valorVenta = round($total / 1.18, 2);
-            $igv = round($total - $valorVenta, 2);
+            $prodCode = $item->product ? ($item->product->sku ?: 'P' . str_pad($item->product_id, 4, '0', STR_PAD_LEFT)) : 'P001';
+            $prodName = $item->product ? $item->product->name : 'Producto Gourmetica';
 
             $detail = new SaleDetail();
-            $detail->setCodProducto('SERV-001')
+            $detail->setCodProducto($prodCode)
                 ->setUnidad('NIU')
-                ->setCantidad(1)
-                ->setDescripcion('Consumo en Restaurante Gourmetica')
-                ->setMtoValorUnitario($valorVenta)
-                ->setMtoPrecioUnitario($total)
-                ->setMtoValorVenta($valorVenta)
-                ->setTipAfeIgv('10')
-                ->setIgv($igv)
-                ->setTotalImpuestos($igv)
-                ->setMtoBaseIgv($valorVenta)
+                ->setCantidad($qty)
+                ->setDescripcion($prodName)
+                ->setMtoValorUnitario($unitValue)
+                ->setMtoPrecioUnitario($linePriceWithIgv)
+                ->setMtoValorVenta($itemValorVenta)
+                ->setTipAfeIgv('10') // Gravado - Operación Onerosa
+                ->setIgv($itemIgv)
+                ->setTotalImpuestos($itemIgv)
+                ->setMtoBaseIgv($itemValorVenta)
                 ->setPorcentajeIgv(18.00);
 
             $details[] = $detail;
-            $totalGravada = $valorVenta;
-            $totalIgv = $igv;
+            $totalGravada += $itemValorVenta;
+            $totalIgv += $itemIgv;
+        }
+
+        // Servicio de entrega / delivery si existe
+        if ($order && $order->delivery_price && (float)$order->delivery_price > 0) {
+            $delPriceWithIgv = (float)$order->delivery_price;
+            $delUnitValue = round($delPriceWithIgv / 1.18, 4);
+            $delValorVenta = round($delUnitValue, 2);
+            $delIgv = round($delPriceWithIgv - $delValorVenta, 2);
+
+            $delDetail = new SaleDetail();
+            $delDetail->setCodProducto('SERV-DELIVERY')
+                ->setUnidad('ZZ')
+                ->setCantidad(1)
+                ->setDescripcion('Servicio de Delivery')
+                ->setMtoValorUnitario($delUnitValue)
+                ->setMtoPrecioUnitario($delPriceWithIgv)
+                ->setMtoValorVenta($delValorVenta)
+                ->setTipAfeIgv('10')
+                ->setIgv($delIgv)
+                ->setTotalImpuestos($delIgv)
+                ->setMtoBaseIgv($delValorVenta)
+                ->setPorcentajeIgv(18.00);
+
+            $details[] = $delDetail;
+            $totalGravada += $delValorVenta;
+            $totalIgv += $delIgv;
         }
 
         $saleTotal = (float)$sale->total;

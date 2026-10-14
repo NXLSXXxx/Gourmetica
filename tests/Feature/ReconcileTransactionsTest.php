@@ -80,7 +80,7 @@ class ReconcileTransactionsTest extends TestCase
         ]);
 
         $this->artisan('audit:reconcile')
-            ->expectsOutputToContain('CONCILIACION EXITOSA')
+            ->expectsOutputToContain('CONCILIACION INTERNA EXITOSA')
             ->expectsOutputToContain('0 (Conciliación perfecta)')
             ->assertExitCode(0);
     }
