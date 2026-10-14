@@ -26,18 +26,25 @@ class NakamaWebhookController extends Controller
             ?: $request->query('token')
             ?: $request->input('token');
 
-        if (!empty($configuredSecret)) {
-            if (empty($providedToken) || !hash_equals((string)$configuredSecret, (string)$providedToken)) {
-                Log::warning('NakamaWebhook: Intento no autorizado recibido.', [
-                    'ip' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                ]);
+        // Principio Fail-Closed: Si no hay secreto configurado en el servidor, rechazar todo intento
+        if (empty($configuredSecret)) {
+            Log::error('NakamaWebhook: Webhook inhabilitado. Falta configurar secreto o API Key en el servidor.');
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Servicio no configurado: Falta clave secreta de webhook en el servidor.'
+            ], 503);
+        }
 
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No autorizado: Credenciales de webhook no válidas.'
-                ], 401);
-            }
+        if (empty($providedToken) || !hash_equals((string)$configuredSecret, (string)$providedToken)) {
+            Log::warning('NakamaWebhook: Intento no autorizado recibido.', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No autorizado: Credenciales de webhook no válidas.'
+            ], 401);
         }
 
         $payload = $request->all();
