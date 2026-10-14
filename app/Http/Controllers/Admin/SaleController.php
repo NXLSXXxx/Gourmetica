@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Sale;
+use App\Models\Order;
 use App\Services\SunatService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class SaleController extends Controller
 {
     public function index()
     {
+        Gate::authorize('viewAny', Sale::class);
+
         $user = auth('admin')->user();
         $query = Sale::with(['user', 'headquarter'])->latest();
 
@@ -46,6 +50,8 @@ class SaleController extends Controller
             'products.*.id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
         ]);
+
+        Gate::authorize('create', [Sale::class, (int)$request->headquarter_id]);
 
         $user = auth('admin')->user();
         if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== (int)$request->headquarter_id) {
@@ -89,6 +95,7 @@ class SaleController extends Controller
     public function declareToSunat($id, SunatService $sunatService)
     {
         $sale = Sale::findOrFail($id);
+        Gate::authorize('declare', $sale);
 
         if ($sale->sunat_status === 'ACEPTADO') {
             return back()->with('info', 'Esta venta ya fue declarada y aceptada.');
@@ -118,19 +125,25 @@ class SaleController extends Controller
 
     public function liveOrders(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $user = auth('admin')->user();
 
-        $hqQuery = \App\Models\Headquarter::where('is_active', true);
         if ($user->isSedeAdmin() || $user->isCajero()) {
-            $hqQuery->where('id', $user->headquarter_id);
+            if ($request->filled('hq_id') && (int)$request->input('hq_id') !== (int)$user->headquarter_id) {
+                if ($request->ajax()) {
+                    return response()->json(['message' => 'No tienes permiso para acceder a las operaciones de caja de otra sede.'], 403);
+                }
+                abort(403, 'No tienes permiso para acceder a las operaciones de caja de otra sede.');
+            }
+            $hqId = (int)$user->headquarter_id;
+            $hqQuery = \App\Models\Headquarter::where('id', $hqId);
+        } else {
+            $hqQuery = \App\Models\Headquarter::where('is_active', true);
+            $hqId = (int)($request->input('hq_id') ?: (\App\Models\Headquarter::where('is_active', true)->first()->id ?? 1));
         }
-        $headquarters = $hqQuery->get();
 
-        // Get live orders for the headquarter
-        $hqId = $request->input('hq_id');
-        if (!$hqId) {
-            $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : ($headquarters->first()->id ?? 1);
-        }
+        $headquarters = $hqQuery->get();
 
         $products = \App\Models\Product::with(['category', 'headquarters', 'options.values'])
             ->where('is_active', true)
@@ -159,6 +172,8 @@ class SaleController extends Controller
 
     public function liveOrdersStore(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         // This is for quick purchases (compra rapida) directly at the headquarter
         $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
@@ -203,65 +218,87 @@ class SaleController extends Controller
             $userId = $customer->id;
         }
 
-        // Create Order
-        $order = \App\Models\Order::create([
-            'user_id' => $userId,
-            'customer_name' => $orderCustomerName,
-            'headquarter_id' => $request->headquarter_id,
-            'total' => $request->total,
-            'status' => $orderType === 'whatsapp' ? 'pending' : 'delivered',
-            'address' => $orderType === 'whatsapp' ? ($request->address ?: 'Recojo') : 'Compra Rápida - Sede',
-            'payment_method' => $orderType === 'whatsapp' ? 'Efectivo' : 'Efectivo',
-            'payment_status' => $orderType === 'whatsapp' ? 'pending' : 'paid',
-            'delivery_price' => $orderType === 'whatsapp' ? ($request->delivery_price ?? 0) : 0,
-        ]);
+        // Recalcular precios de ítems y total estrictamente en el servidor
+        $verifiedItems = [];
+        $calculatedTotal = 0;
+        $hqId = (int)$request->headquarter_id;
 
-        // Save order items
-        foreach ($request->items as $item) {
-            $order->items()->create([
-                'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'options' => $item['options'] ?? null,
+        foreach ($request->items as $rawItem) {
+            $product = \App\Models\Product::findOrFail($rawItem['product_id']);
+            $unitPrice = (float)$product->getPriceForHeadquarter($hqId);
+
+            if (!empty($rawItem['options']) && is_array($rawItem['options'])) {
+                $optValues = \App\Models\ProductOptionValue::whereIn('id', array_values($rawItem['options']))->get();
+                $unitPrice += (float)$optValues->sum('price_modifier');
+            }
+
+            $qty = max(1, (int)$rawItem['quantity']);
+            $calculatedTotal += ($unitPrice * $qty);
+
+            $verifiedItems[] = [
+                'product_id' => $product->id,
+                'quantity' => $qty,
+                'price' => $unitPrice,
+                'options' => $rawItem['options'] ?? null,
+            ];
+        }
+
+        $deliveryPrice = $orderType === 'whatsapp' ? max(0, (float)($request->delivery_price ?? 0)) : 0;
+        $calculatedTotal += $deliveryPrice;
+
+        // Ejecutar creación del pedido, items, descuento de stock y venta en una sola transacción atómica
+        $sale = null;
+        $order = \Illuminate\Support\Facades\DB::transaction(function () use (
+            $userId, $orderCustomerName, $request, $calculatedTotal, $orderType, $deliveryPrice, $verifiedItems, &$sale
+        ) {
+            $order = \App\Models\Order::create([
+                'user_id' => $userId,
+                'customer_name' => $orderCustomerName,
+                'headquarter_id' => $request->headquarter_id,
+                'total' => $calculatedTotal,
+                'status' => $orderType === 'whatsapp' ? 'pending' : 'delivered',
+                'address' => $orderType === 'whatsapp' ? ($request->address ?: 'Recojo') : 'Compra Rápida - Sede',
+                'payment_method' => 'Efectivo',
+                'payment_status' => $orderType === 'whatsapp' ? 'pending' : 'paid',
+                'delivery_price' => $deliveryPrice,
             ]);
-        }
-        
-        // Use the model method to decrement stock to keep idempotence
-        if ($orderType === 'salon') {
-            $order->decrementProductStock();
-        }
 
-        if ($orderType === 'whatsapp') {
-            return response()->json([
-                'success' => true,
-                'message' => 'Pedido de WhatsApp registrado en cocina.',
-                'live_orders' => $this->getLiveOrdersData($request->headquarter_id),
-            ]);
-        }
+            foreach ($verifiedItems as $vItem) {
+                $order->items()->create($vItem);
+            }
 
-        // Create Sale ONLY for Salon orders immediately
-        $documentType = $request->document_type;
-        $series = $documentType === '01' ? 'F001' : 'B001';
+            // Descontar inventario de forma segura
+            if ($orderType === 'salon') {
+                $order->decrementProductStock();
 
-        $lastSale = Sale::where('document_type', $documentType)
-            ->where('series', $series)
-            ->orderBy('correlative', 'desc')
-            ->first();
+                $documentType = $request->document_type ?: '03';
+                $series = $documentType === '01' ? 'F001' : 'B001';
 
-        $correlative = $lastSale ? $lastSale->correlative + 1 : 500;
+                // Bloqueo de fila para evitar duplicados de correlativo en cajas concurrentes
+                $lastSale = Sale::where('document_type', $documentType)
+                    ->where('series', $series)
+                    ->orderBy('correlative', 'desc')
+                    ->lockForUpdate()
+                    ->first();
 
-        $sale = Sale::create([
-            'user_id' => $userId,
-            'headquarter_id' => $request->headquarter_id,
-            'document_type' => $documentType,
-            'series' => $series,
-            'correlative' => $correlative,
-            'total' => $request->total,
-            'status' => 'completed',
-            'sunat_status' => 'pending',
-            'order_id' => $order->id,
-            'table_number' => null, // No more tables
-        ]);
+                $correlative = $lastSale ? $lastSale->correlative + 1 : 500;
+
+                $sale = Sale::create([
+                    'user_id' => $userId,
+                    'headquarter_id' => $request->headquarter_id,
+                    'document_type' => $documentType,
+                    'series' => $series,
+                    'correlative' => $correlative,
+                    'total' => $calculatedTotal,
+                    'status' => 'completed',
+                    'sunat_status' => 'pending',
+                    'order_id' => $order->id,
+                    'table_number' => null,
+                ]);
+            }
+
+            return $order;
+        });
 
         // Auto declare to SUNAT via SOAP
         $sunatService = new SunatService();
@@ -296,16 +333,15 @@ class SaleController extends Controller
 
     public function liveOrdersUpdateStatus(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $request->validate([
             'order_id' => 'required|exists:orders,id',
             'status' => 'required|in:pending,preparing,shipped,delivered,cancelled',
         ]);
 
-        $order = \App\Models\Order::findOrFail($request->order_id);
-        $user = auth('admin')->user();
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
-        }
+        $order = Order::findOrFail($request->order_id);
+        Gate::authorize('update', $order);
 
         $isDelivery = $order->delivery_zone_id || $order->delivery_price > 0;
         // Removido temporalmente el bloqueo estricto para permitir Forzar Entrega Manual en caso de fallos de Webhook locales.
@@ -345,15 +381,14 @@ class SaleController extends Controller
 
     public function liveOrdersCancel(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $request->validate([
             'order_id' => 'required|exists:orders,id',
         ]);
 
-        $order = \App\Models\Order::findOrFail($request->order_id);
-        $user = auth('admin')->user();
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
-        }
+        $order = Order::findOrFail($request->order_id);
+        Gate::authorize('cancel', $order);
 
         $hqId = $order->headquarter_id;
         

@@ -354,6 +354,9 @@
         <input type="hidden" name="culqi_token" id="culqi_token">
         <input type="hidden" name="izipay_token" id="izipay_token">
         <input type="hidden" name="izipay_transaction_uuid" id="izipay_transaction_uuid">
+        <input type="hidden" name="izipay_raw_answer" id="izipay_raw_answer">
+        <input type="hidden" name="izipay_hash" id="izipay_hash">
+        <input type="hidden" name="order_id" id="izipay_order_id">
         
         <input type="hidden" name="shipping_type" id="form_shipping_type" value="pickup">
         <input type="hidden" name="headquarter_id" id="form_pickup_hq" value="{{ $selectedHq->id ?? '' }}">
@@ -1124,8 +1127,15 @@
 
     // Cargar el formToken de IZIPAY vía AJAX y montar el SDK
     async function loadIzipayForm() {
-        const emailField  = document.querySelector('input[name="email"]');
-        const emailValue  = emailField ? emailField.value : 'guest@gourmetica.com.pe';
+        const emailField = document.querySelector('input[name="email"]');
+        const emailValue = emailField ? emailField.value : 'guest@gourmetica.com.pe';
+        const shippingType = document.getElementById('form_shipping_type')?.value || selectedShippingType || 'pickup';
+        const hqId = document.getElementById('form_pickup_hq')?.value || '{{ $selectedHq->id ?? "" }}';
+        const lat = document.getElementById('form_latitude')?.value || '';
+        const lng = document.getElementById('form_longitude')?.value || '';
+        const address = document.getElementById('form_delivery_address')?.value || '';
+        const phone = document.getElementById('form_phone')?.value || '';
+        const customerName = ((document.querySelector('input[name="first_name"]')?.value || '') + ' ' + (document.querySelector('input[name="last_name"]')?.value || '')).trim();
 
         try {
             const response = await fetch('{{ route("checkout.izipay_token") }}', {
@@ -1135,7 +1145,16 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
                         || '{{ csrf_token() }}',
                 },
-                body: JSON.stringify({ email: emailValue, delivery_price: selectedDeliveryPrice }),
+                body: JSON.stringify({
+                    email: emailValue,
+                    shipping_type: shippingType,
+                    headquarter_id: hqId,
+                    latitude: lat,
+                    longitude: lng,
+                    address: address,
+                    phone: phone,
+                    customer_name: customerName
+                }),
             });
 
             const data = await response.json();
@@ -1144,6 +1163,11 @@
                 document.getElementById('izipay-loading').innerHTML =
                     `<p class="text-sm text-red-500">⚠️ No se pudo cargar el formulario de pago: ${data.message}</p>`;
                 return;
+            }
+
+            if (data.orderId) {
+                const orderIdInput = document.getElementById('izipay_order_id');
+                if (orderIdInput) orderIdInput.value = data.orderId;
             }
 
             izipayFormToken = data.formToken;
@@ -1182,13 +1206,17 @@
 
     // Callback cuando IZIPAY procesa el pago exitosamente
     async function handleIzipayPayment(response) {
-        // response contiene el resultado del pago de IZIPAY
-        const { clientAnswer, hashKey } = response;
+        // response contiene el resultado criptográfico del pago de IZIPAY
+        const clientAnswer = response.clientAnswer;
+        const rawAnswer = response.rawClientAnswer || (clientAnswer ? JSON.stringify(clientAnswer) : '');
+        const hash = response.hash || response.hashKey || '';
 
         if (clientAnswer && clientAnswer.orderStatus === 'PAID') {
-            // Guardar el token/uuid del pago en el formulario
+            // Guardar los datos de pago y firma criptográfica para validación en servidor
             document.getElementById('izipay_token').value = clientAnswer.transactions?.[0]?.uuid || 'izipay-paid';
             document.getElementById('izipay_transaction_uuid').value = clientAnswer.orderDetails?.orderId || '';
+            document.getElementById('izipay_raw_answer').value = rawAnswer;
+            document.getElementById('izipay_hash').value = hash;
 
             // Enviar el formulario principal de pedido
             document.getElementById('checkout-form').submit();

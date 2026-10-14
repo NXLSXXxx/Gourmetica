@@ -12,7 +12,15 @@ class DashboardController extends Controller
         $user = auth('admin')->user();
         
         if (!$user) {
-            return redirect()->route('login')->with('error', 'Debes iniciar sesión para acceder al panel.');
+            return redirect()->route('admin.login')->with('error', 'Debes iniciar sesión para acceder al panel.');
+        }
+
+        if ($user->isCajero()) {
+            return redirect()->route('admin.live_orders.index');
+        }
+
+        if ($user->isIngeniero()) {
+            return redirect()->route('admin.audits.index');
         }
 
         $query = \App\Models\Headquarter::query();

@@ -16,6 +16,9 @@ class AdminMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         if (!auth('admin')->check()) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
             return redirect()->route('admin.login')->with('error', 'Debes iniciar sesión para acceder a la intranet.');
         }
 
@@ -24,10 +27,15 @@ class AdminMiddleware
         // Allow Admin General, Admin de Sede, Ingeniero, and Cajero
         $allowedSlugs = ['admin_general', 'admin_sede', 'ingeniero', 'cajero'];
         
-        if (!in_array($user->role->slug, $allowedSlugs)) {
+        if (!in_array($user->role?->slug, $allowedSlugs)) {
             auth('admin')->logout();
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'No tienes permisos para acceder a esta área.'], 403);
+            }
             return redirect()->route('admin.login')->with('error', 'No tienes permisos para acceder a esta área.');
         }
+
+        auth()->shouldUse('admin');
 
         return $next($request);
     }

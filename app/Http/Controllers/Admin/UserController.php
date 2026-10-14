@@ -20,10 +20,7 @@ class UserController extends Controller implements HasMiddleware
     {
         return [
             new Middleware(function ($request, $next) {
-                $user = auth('admin')->user();
-                if (!$user || (!$user->isAdmin() && !$user->isIngeniero())) {
-                    abort(403, 'No tienes permisos para acceder a la gestión de administradores.');
-                }
+                \Illuminate\Support\Facades\Gate::authorize('manage-users');
                 return $next($request);
             }),
         ];
@@ -34,14 +31,10 @@ class UserController extends Controller implements HasMiddleware
      */
     public function index()
     {
-        $currentUser = auth('admin')->user();
-        
-        $users = User::whereHas('role', function ($query) use ($currentUser) {
-            $allowedSlugs = ['admin_general', 'admin_sede', 'cajero'];
-            if ($currentUser->isIngeniero()) {
-                $allowedSlugs[] = 'ingeniero';
-            }
-            $query->whereIn('slug', $allowedSlugs);
+        \Illuminate\Support\Facades\Gate::authorize('manage-users');
+
+        $users = User::whereHas('role', function ($query) {
+            $query->whereIn('slug', ['admin_general', 'admin_sede', 'cajero', 'ingeniero']);
         })->with(['role', 'headquarter'])->paginate(15);
 
         return view('admin.users.index', compact('users'));
@@ -52,13 +45,9 @@ class UserController extends Controller implements HasMiddleware
      */
     public function create()
     {
-        $currentUser = auth('admin')->user();
-        $allowedSlugs = ['admin_general', 'admin_sede', 'cajero'];
-        if ($currentUser->isIngeniero()) {
-            $allowedSlugs[] = 'ingeniero';
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-users');
 
-        $roles = Role::whereIn('slug', $allowedSlugs)->get();
+        $roles = Role::whereIn('slug', ['admin_general', 'admin_sede', 'cajero', 'ingeniero'])->get();
         $headquarters = Headquarter::all();
 
         return view('admin.users.create', compact('roles', 'headquarters'));
@@ -78,12 +67,6 @@ class UserController extends Controller implements HasMiddleware
             'password' => 'required|string|min:8',
             'role_id' => 'required|exists:roles,id',
         ];
-
-        // Security block: Ensure a non-engineer cannot assign the engineer role
-        $selectedRole = Role::findOrFail($request->role_id);
-        if ($selectedRole->slug === 'ingeniero' && !auth('admin')->user()->isIngeniero()) {
-            abort(403, 'No tienes permisos para asignar el rol de Ingeniero de Sistemas.');
-        }
 
         // Headquarter is strictly required if the role is Admin de Sede or Cajero
         $isStoreRole = ($sedeAdminRole && $request->role_id == $sedeAdminRole->id) || ($cajeroRole && $request->role_id == $cajeroRole->id);
@@ -116,6 +99,8 @@ class UserController extends Controller implements HasMiddleware
      */
     public function edit($id)
     {
+        \Illuminate\Support\Facades\Gate::authorize('manage-users');
+
         $user = User::findOrFail($id);
         
         // Ensure we are editing an administrative user
@@ -123,19 +108,7 @@ class UserController extends Controller implements HasMiddleware
             abort(403, 'No puedes editar un cliente regular desde este panel.');
         }
 
-        $currentUser = auth('admin')->user();
-
-        // Security block: Prevent non-engineers from accessing an engineer user
-        if ($user->isIngeniero() && !$currentUser->isIngeniero()) {
-            abort(403, 'No tienes permisos para ver o editar a un Ingeniero de Sistemas.');
-        }
-
-        $allowedSlugs = ['admin_general', 'admin_sede', 'cajero'];
-        if ($currentUser->isIngeniero()) {
-            $allowedSlugs[] = 'ingeniero';
-        }
-
-        $roles = Role::whereIn('slug', $allowedSlugs)->get();
+        $roles = Role::whereIn('slug', ['admin_general', 'admin_sede', 'cajero', 'ingeniero'])->get();
         $headquarters = Headquarter::all();
 
         return view('admin.users.edit', compact('user', 'roles', 'headquarters'));
@@ -146,23 +119,12 @@ class UserController extends Controller implements HasMiddleware
      */
     public function update(Request $request, $id)
     {
+        \Illuminate\Support\Facades\Gate::authorize('manage-users');
+
         $user = User::findOrFail($id);
         
         if ($user->role->slug === 'cliente') {
             abort(403);
-        }
-
-        $currentUser = auth('admin')->user();
-
-        // Security block: Prevent non-engineers from updating an engineer user
-        if ($user->isIngeniero() && !$currentUser->isIngeniero()) {
-            abort(403, 'No tienes permisos para actualizar a un Ingeniero de Sistemas.');
-        }
-
-        // Security block: Ensure a non-engineer cannot change role to engineer
-        $selectedRole = Role::findOrFail($request->role_id);
-        if ($selectedRole->slug === 'ingeniero' && !$currentUser->isIngeniero()) {
-            abort(403, 'No tienes permisos para asignar el rol de Ingeniero de Sistemas.');
         }
 
         $sedeAdminRole = Role::where('slug', 'admin_sede')->first();
@@ -208,15 +170,12 @@ class UserController extends Controller implements HasMiddleware
      */
     public function destroy($id)
     {
+        \Illuminate\Support\Facades\Gate::authorize('manage-users');
+
         $user = User::findOrFail($id);
 
         if ($user->role->slug === 'cliente') {
             abort(403);
-        }
-
-        // Security block: Prevent non-engineers from deleting an engineer user
-        if ($user->isIngeniero() && !auth('admin')->user()->isIngeniero()) {
-            abort(403, 'No tienes permisos para eliminar a un Ingeniero de Sistemas.');
         }
 
         // Self-deletion check safeguards

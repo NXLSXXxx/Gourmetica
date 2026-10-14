@@ -11,29 +11,17 @@ class DeliveryZoneController extends Controller
 {
     public function index()
     {
-        $user = auth('admin')->user();
+        \Illuminate\Support\Facades\Gate::authorize('manage-delivery-zones');
 
-        $query = DeliveryZone::with('headquarter');
-
-        if ($user->isSedeAdmin() || $user->isCajero()) {
-            $query->where('headquarter_id', $user->headquarter_id);
-        }
-
-        $zones = $query->orderBy('headquarter_id')->orderBy('name')->get();
-
-        // Also fetch active headquarters for the dropdown when creating/editing
-        $hqQuery = Headquarter::where('is_active', true);
-        if ($user->isSedeAdmin() || $user->isCajero()) {
-            $hqQuery->where('id', $user->headquarter_id);
-        }
-        $headquarters = $hqQuery->get();
+        $zones = DeliveryZone::with('headquarter')->orderBy('headquarter_id')->orderBy('name')->get();
+        $headquarters = Headquarter::where('is_active', true)->get();
 
         return view('admin.delivery_zones.index', compact('zones', 'headquarters'));
     }
 
     public function store(Request $request)
     {
-        $user = auth('admin')->user();
+        \Illuminate\Support\Facades\Gate::authorize('manage-delivery-zones');
 
         $validated = $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
@@ -42,11 +30,6 @@ class DeliveryZoneController extends Controller
             'is_active' => 'nullable|boolean',
             'coordinates' => 'nullable|string'
         ]);
-
-        // Security check for store-level users
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== (int)$validated['headquarter_id']) {
-            abort(403, 'No tienes permiso para gestionar zonas de otra sede.');
-        }
 
         $validated['is_active'] = $request->has('is_active');
 
@@ -57,12 +40,7 @@ class DeliveryZoneController extends Controller
 
     public function update(Request $request, DeliveryZone $deliveryZone)
     {
-        $user = auth('admin')->user();
-
-        // Security check for store-level users
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $deliveryZone->headquarter_id) {
-            abort(403, 'No tienes permiso para gestionar zonas de otra sede.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-delivery-zones');
 
         $validated = $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
@@ -71,10 +49,6 @@ class DeliveryZoneController extends Controller
             'is_active' => 'nullable|boolean',
             'coordinates' => 'nullable|string'
         ]);
-
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== (int)$validated['headquarter_id']) {
-            abort(403, 'No puedes reasignar esta zona a otra sede.');
-        }
 
         $validated['is_active'] = $request->has('is_active');
 
@@ -85,12 +59,7 @@ class DeliveryZoneController extends Controller
 
     public function destroy(DeliveryZone $deliveryZone)
     {
-        $user = auth('admin')->user();
-
-        // Security check for store-level users
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $deliveryZone->headquarter_id) {
-            abort(403, 'No tienes permiso para gestionar zonas de otra sede.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-delivery-zones');
 
         $deliveryZone->delete();
 

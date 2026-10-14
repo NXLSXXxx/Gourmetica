@@ -9,9 +9,7 @@ class AuditController extends Controller
 {
     public function index()
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403);
-        }
+        \Illuminate\Support\Facades\Gate::authorize('view-audits');
 
         $audits = \App\Models\Audit::with('user')->orderBy('created_at', 'desc')->paginate(20);
 

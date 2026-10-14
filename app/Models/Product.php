@@ -71,7 +71,8 @@ class Product extends Model
                 ? $this->headquarters->firstWhere('id', $headquarterId)
                 : $this->headquarters()->where('headquarters.id', $headquarterId)->first();
 
-            if ($hq && $hq->pivot && $hq->pivot->price !== null && (float)$hq->pivot->price > 0) {
+            // Respetar precio específico de la sede incluso si es 0.00
+            if ($hq && $hq->pivot && $hq->pivot->price !== null && $hq->pivot->price !== '') {
                 return (float)$hq->pivot->price;
             }
         }
@@ -79,14 +80,18 @@ class Product extends Model
         return (float)$this->base_price;
     }
 
-    public function isAvailableInHeadquarter($headquarterId = null)
+    public function isAvailableInHeadquarter($headquarterId = null, bool $checkStock = false)
     {
+        if (!$this->is_active) {
+            return false;
+        }
+
         if (!$headquarterId) {
             $headquarterId = session('selected_headquarter_id');
         }
 
         if (!$headquarterId) {
-            return true;
+            return (bool)$this->is_active;
         }
 
         $hq = $this->relationLoaded('headquarters')
@@ -97,7 +102,16 @@ class Product extends Model
             return false;
         }
 
-        return isset($hq->pivot->is_available) ? (bool)$hq->pivot->is_available : true;
+        $isAvailable = isset($hq->pivot->is_available) ? (bool)$hq->pivot->is_available : true;
+        if (!$isAvailable) {
+            return false;
+        }
+
+        if ($checkStock && (int)($hq->pivot->stock ?? 0) <= 0) {
+            return false;
+        }
+
+        return true;
     }
 
     public function getStockForHeadquarter($headquarterId = null)
