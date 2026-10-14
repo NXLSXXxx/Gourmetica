@@ -181,4 +181,16 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Disaster Recovery Drill Allowed Target Databases (Whitelist Estricta)
+    |--------------------------------------------------------------------------
+    |
+    | Lista explícita y exhaustiva de nombres exactos de bases de datos
+    | autorizadas para actuar como destino del simulacro de recuperación.
+    | Toda base no listada aquí será bloqueada incondicionalmente por seguridad.
+    |
+    */
+    'dr_allowed_databases' => array_values(array_filter(array_map('trim', explode(',', env('DR_ALLOWED_DATABASES', 'gourmeti_drill,gourmetica_drill,gourmetica_test'))))),
+
 ];

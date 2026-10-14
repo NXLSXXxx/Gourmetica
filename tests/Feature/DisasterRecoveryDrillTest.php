@@ -83,4 +83,41 @@ class DisasterRecoveryDrillTest extends TestCase
             ->expectsOutputToContain('100% de tablas y registros verificados idénticos')
             ->assertExitCode(0);
     }
+
+    /**
+     * Prueba que el comando DR rechace tajantemente nombres engañosos con subcadenas permisivas
+     * (ej. clientes_test_backup, produccion_temp, etc.) incluso cuando se especifica el flag --force.
+     */
+    public function test_dr_drill_rejects_deceptive_database_names_even_with_force_flag(): void
+    {
+        $origConn = config('database.default');
+        $origAllowed = config('database.dr_allowed_databases');
+        try {
+            config(['database.default' => 'mysql']);
+            config(['database.connections.mysql.database' => 'gourmetica']);
+            config(['database.dr_allowed_databases' => ['gourmeti_drill', 'gourmetica_drill']]);
+
+            $deceptiveNames = [
+                'clientes_test_backup',
+                'produccion_temp',
+                'empresa_drill_real',
+                'test_clientes',
+                'temp_db_produccion',
+                'sandbox_facturacion',
+                'clientes_test',
+            ];
+
+            foreach ($deceptiveNames as $target) {
+                $this->artisan('audit:dr-drill', [
+                    '--target-db' => $target,
+                    '--force' => true,
+                ])
+                    ->expectsOutputToContain('[BLOQUEO DE SEGURIDAD]: Destino no autorizado')
+                    ->assertExitCode(1);
+            }
+        } finally {
+            config(['database.default' => $origConn]);
+            config(['database.dr_allowed_databases' => $origAllowed]);
+        }
+    }
 }

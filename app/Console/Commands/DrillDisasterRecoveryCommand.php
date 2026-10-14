@@ -66,7 +66,7 @@ class DrillDisasterRecoveryCommand extends Command
         ];
 
         // Impedir absolutamente cualquier operación si el objetivo coincide con la BD activa o protegida
-        if (in_array(strtolower((string)$targetDb), $protectedDatabases, true) || $targetDb === $sourceDb) {
+        if (in_array(strtolower((string)$targetDb), $protectedDatabases, true) || strtolower((string)$targetDb) === strtolower((string)$sourceDb)) {
             $this->error("-------------------------------------------------------------------------------");
             $this->error(" [BLOQUEO DE SEGURIDAD]: El objetivo '{$targetDb}' coincide con la base de datos");
             $this->error(" de producción activa o una base reservada del sistema.");
@@ -75,23 +75,30 @@ class DrillDisasterRecoveryCommand extends Command
             return 1;
         }
 
-        // Whitelist obligatoria: el nombre de destino debe contener palabras de prueba autorizadas
-        $safePatterns = ['drill', 'test', 'temp', 'staging', 'sandbox', 'tmp'];
-        $hasSafeKeyword = false;
-        foreach ($safePatterns as $pattern) {
-            if (str_contains(strtolower((string)$targetDb), $pattern)) {
-                $hasSafeKeyword = true;
-                break;
-            }
-        }
+        // Whitelist obligatoria y estricta: Coincidencia EXACTA contra bases configuradas fuera del código
+        // Se prohíben expresamente las subcadenas permisivas (que permitirían nombres como 'clientes_test_backup')
+        $allowedDatabases = (array) config('database.dr_allowed_databases', ['gourmeti_drill', 'gourmetica_drill', 'gourmetica_test']);
+        $allowedLower = array_map('strtolower', $allowedDatabases);
 
-        if (!$hasSafeKeyword) {
-            $this->error("-------------------------------------------------------------------------------");
-            $this->error(" [BLOQUEO DE SEGURIDAD]: Destino no autorizado '{$targetDb}'.");
-            $this->error(" Para prevenir accidentes, el destino debe contener explícitamente un prefijo o");
-            $this->error(" sufijo de prueba autorizado: 'drill', 'test', 'staging', 'temp' o 'sandbox'.");
-            $this->error("-------------------------------------------------------------------------------");
-            return 1;
+        if ($driver === 'sqlite') {
+            $isBackupsSqlite = str_ends_with($targetDb, '.sqlite') && str_contains($targetDb, 'backups');
+            if (!$isBackupsSqlite && !in_array(strtolower((string)$targetDb), $allowedLower, true)) {
+                $this->error("-------------------------------------------------------------------------------");
+                $this->error(" [BLOQUEO DE SEGURIDAD]: Destino no autorizado '{$targetDb}'.");
+                $this->error("-------------------------------------------------------------------------------");
+                return 1;
+            }
+        } else {
+            if (!in_array(strtolower((string)$targetDb), $allowedLower, true)) {
+                $this->error("-------------------------------------------------------------------------------");
+                $this->error(" [BLOQUEO DE SEGURIDAD]: Destino no autorizado '{$targetDb}'.");
+                $this->error(" Para prevenir destrucción accidental de bases legítimas con nombres que contengan");
+                $this->error(" subcadenas engañosas (ej: 'clientes_test_backup'), el destino debe coincidir");
+                $this->error(" EXACTAMENTE con una base autorizada en la configuración (DR_ALLOWED_DATABASES).");
+                $this->error(" Bases autorizadas configuradas: " . implode(', ', $allowedDatabases));
+                $this->error("-------------------------------------------------------------------------------");
+                return 1;
+            }
         }
 
         if (!$this->option('force') && $this->input->isInteractive()) {
@@ -364,6 +371,30 @@ class DrillDisasterRecoveryCommand extends Command
             // Si ya existe, purgar tablas previas para asegurar una restauración limpia y determinista
             $existingTables = $targetPdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
             if (!empty($existingTables)) {
+                // Validación de seguridad: Comprobar que las tablas pertenezcan al esquema reconocido de Gourmetica
+                // Si la base contiene tablas foráneas no identificadas, se bloquea la ejecución para proteger datos ajenos
+                $sourceTablesRaw = DB::select('SHOW TABLES');
+                $sourceDb = config('database.connections.mysql.database') ?? 'gourmetica';
+                $prop = "Tables_in_{$sourceDb}";
+                $knownTables = array_map(function($t) use ($prop) {
+                    return strtolower(isset($t->$prop) ? $t->$prop : array_values((array)$t)[0]);
+                }, $sourceTablesRaw);
+
+                $unrecognizedTables = [];
+                foreach ($existingTables as $tName) {
+                    if (!in_array(strtolower($tName), $knownTables, true)) {
+                        $unrecognizedTables[] = $tName;
+                    }
+                }
+
+                if (!empty($unrecognizedTables)) {
+                    throw new \Exception(
+                        " [BLOQUEO DE SEGURIDAD]: La base destino '{$targetDb}' contiene " . count($unrecognizedTables) . 
+                        " tablas con datos preexistentes no reconocidos como parte del simulacro Gourmetica (" . 
+                        implode(', ', array_slice($unrecognizedTables, 0, 5)) . "). Se aborta la operación para proteger datos ajenos."
+                    );
+                }
+
                 $targetPdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
                 foreach ($existingTables as $t) {
                     $targetPdo->exec("DROP TABLE IF EXISTS `{$t}`;");
