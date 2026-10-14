@@ -56,9 +56,11 @@ class ReconcileTransactionsCommand extends Command
         $matchedPaidOrders = 0;
         $totalVolumePaid = 0;
         $totalVolumeSales = 0;
+        $matchedGateways = 0;
+        $totalElectronicOrders = 0;
 
         // ---------------------------------------------------------------------
-        // 1. CONCILIACION PEDIDO PAGADO -> VENTA EMITIDA
+        // 1. CONCILIACION INTERNA: PEDIDO PAGADO -> VENTA EMITIDA
         // ---------------------------------------------------------------------
         foreach ($paidOrders as $order) {
             $totalVolumePaid += (float)$order->total;
@@ -104,10 +106,73 @@ class ReconcileTransactionsCommand extends Command
                     ];
                 }
             }
+
+            // -----------------------------------------------------------------
+            // 2. CONCILIACION DE PASARELAS EXTERNAS (IZIPAY / CULQI)
+            // -----------------------------------------------------------------
+            $electronicGateways = ['izipay', 'culqi'];
+            if (in_array(strtolower((string)$order->payment_method), $electronicGateways, true)) {
+                $totalElectronicOrders++;
+
+                if (empty($order->transaction_id)) {
+                    $anomalies[] = [
+                        'tipo' => 'PAGO_EXTERNO_SIN_REFERENCIA',
+                        'referencia' => "Pedido #{$order->id} ({$order->payment_method})",
+                        'detalle' => "Pedido pagado vía {$order->payment_method} sin identificador de transacción externa.",
+                        'severidad' => 'ALTA',
+                    ];
+                } else {
+                    $matchedGateways++;
+
+                    // Verificar consistencia de monto en el payload registrado
+                    if (!empty($order->payment_payload) && is_array($order->payment_payload)) {
+                        $payload = $order->payment_payload;
+                        $gatewayAmountCents = null;
+
+                        if (isset($payload['orderDetails']['orderTotalAmount'])) {
+                            $gatewayAmountCents = (int)$payload['orderDetails']['orderTotalAmount'];
+                        } elseif (isset($payload['amount'])) {
+                            $gatewayAmountCents = (int)$payload['amount'];
+                        }
+
+                        if ($gatewayAmountCents !== null) {
+                            $expectedCents = (int)round($order->total * 100);
+                            if (abs($gatewayAmountCents - $expectedCents) > 1) {
+                                $anomalies[] = [
+                                    'tipo' => 'DISCREPANCIA_MONTO_PASARELA',
+                                    'referencia' => "Pedido #{$order->id} / Tx: {$order->transaction_id}",
+                                    'detalle' => "Monto pasarela (" . ($gatewayAmountCents / 100) . ") no coincide con pedido ({$order->total}).",
+                                    'severidad' => 'CRÍTICA',
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // ---------------------------------------------------------------------
-        // 2. AUDITORIA DE DUPLICADOS EN CORRELATIVOS FISCALES (SERIE + CORRELATIVO)
+        // 3. AUDITORIA DE TRANSACCIONES EXTERNAS DUPLICADAS (ANTI-REPLAY / FRAUDE)
+        // ---------------------------------------------------------------------
+        $dupTransactions = DB::table('orders')
+            ->select('transaction_id', DB::raw('COUNT(*) as total_count'))
+            ->whereNotNull('transaction_id')
+            ->where('transaction_id', '!=', '')
+            ->groupBy('transaction_id')
+            ->having('total_count', '>', 1)
+            ->get();
+
+        foreach ($dupTransactions as $dupTx) {
+            $anomalies[] = [
+                'tipo' => 'TRANSACCION_EXTERNA_DUPLICADA',
+                'referencia' => "Tx: {$dupTx->transaction_id}",
+                'detalle' => "Mismo ID de transacción externa asignado a {$dupTx->total_count} pedidos distintos.",
+                'severidad' => 'CRÍTICA',
+            ];
+        }
+
+        // ---------------------------------------------------------------------
+        // 4. AUDITORIA DE DUPLICADOS EN CORRELATIVOS FISCALES (SERIE + CORRELATIVO)
         // ---------------------------------------------------------------------
         $duplicates = DB::table('sales')
             ->select('series', 'correlative', 'document_type', DB::raw('COUNT(*) as total_count'))
@@ -125,13 +190,14 @@ class ReconcileTransactionsCommand extends Command
         }
 
         // ---------------------------------------------------------------------
-        // 3. REPORTE DE RESULTADOS DE CONCILIACION
+        // 5. REPORTE DE RESULTADOS DE CONCILIACION
         // ---------------------------------------------------------------------
-        $this->line("<fg=yellow;options=bold>--- RESUMEN DE CONCILIACION FINANCIERA ---</>");
+        $this->line("<fg=yellow;options=bold>--- RESUMEN DE CONCILIACION FINANCIERA Y OPERATIVA ---</>");
         $this->table(
             ['Métrica de Conciliación', 'Valor Auditado'],
             [
-                ['Pedidos Pagados Conciliados', "{$matchedPaidOrders} / {$paidOrders->count()}"],
+                ['Pedidos Pagados Conciliados (Interno)', "{$matchedPaidOrders} / {$paidOrders->count()}"],
+                ['Transacciones Pasarelas Validadas (Izipay/Culqi)', "{$matchedGateways} / {$totalElectronicOrders}"],
                 ['Volumen Monetario Pagado (Orders)', 'S/. ' . number_format($totalVolumePaid, 2)],
                 ['Volumen Monetario Emitido (Sales)', 'S/. ' . number_format($totalVolumeSales, 2)],
                 ['Discrepancia Neta de Volumen', 'S/. ' . number_format(abs($totalVolumePaid - $totalVolumeSales), 2)],
@@ -148,7 +214,7 @@ class ReconcileTransactionsCommand extends Command
 
         $this->newLine();
         $this->info("===============================================================================");
-        $this->info("   CONCILIACION EXITOSA: CERO DISCREPANCIAS ENTRE PEDIDOS, PAGOS Y VENTAS      ");
+        $this->info("   CONCILIACION EXITOSA: CERO DISCREPANCIAS ENTRE PEDIDOS, PASARELAS Y VENTAS   ");
         $this->info("===============================================================================");
 
         return 0;

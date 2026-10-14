@@ -40,4 +40,14 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URL'),
     ],
+
+    'sunat' => [
+        'production' => env('SUNAT_PRODUCTION', false),
+        'endpoint_production' => env('SUNAT_ENDPOINT_PRODUCTION', 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService'),
+        'endpoint_demo' => env('SUNAT_ENDPOINT_DEMO', 'https://demo-ose.nubefact.com/ol-ti-itcpe/billService'),
+        'ruc' => env('SUNAT_RUC', '10737725648'),
+        'user' => env('SUNAT_USER', 'MODDATOS'),
+        'pass' => env('SUNAT_PASS', 'MODDATOS'),
+        'certificate_path' => env('SUNAT_CERTIFICATE_PATH', storage_path('app/sunat/certificate.pem')),
+    ],
 ];

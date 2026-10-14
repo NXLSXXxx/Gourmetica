@@ -191,7 +191,6 @@ class OrderController extends Controller
                 'is_gift' => $request->has('is_gift') || $request->input('is_gift') == '1' || $request->input('is_gift') === 'on',
                 'has_card' => $request->has('has_tarjeta') || $request->input('has_tarjeta') == '1' || $request->input('has_tarjeta') === 'on',
                 'has_dedication' => $request->has('has_dedicatoria_torta') || $request->input('has_dedicatoria_torta') == '1' || $request->input('has_dedicatoria_torta') === 'on',
-                'notes' => $request->input('dedicatoria_torta'),
             ]);
 
             foreach ($cart as $item) {
@@ -217,7 +216,6 @@ class OrderController extends Controller
                 'is_gift' => $request->has('is_gift') || $request->input('is_gift') == '1' || $request->input('is_gift') === 'on',
                 'has_card' => $request->has('has_tarjeta') || $request->input('has_tarjeta') == '1' || $request->input('has_tarjeta') === 'on',
                 'has_dedication' => $request->has('has_dedicatoria_torta') || $request->input('has_dedicatoria_torta') == '1' || $request->input('has_dedicatoria_torta') === 'on',
-                'notes' => $request->input('dedicatoria_torta'),
             ]);
         }
 
@@ -227,7 +225,12 @@ class OrderController extends Controller
             $charge = $culqi->createCharge($request->culqi_token, $finalTotal, auth()->user()->email, $order->id);
             
             if (isset($charge['object']) && $charge['object'] === 'charge' && $charge['outcome']['type'] === 'venta_exitosa') {
-                $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+                $order->update([
+                    'payment_status' => 'paid',
+                    'status' => 'preparing',
+                    'transaction_id' => $charge['id'] ?? ('culqi_' . time()),
+                    'payment_payload' => $charge,
+                ]);
                 Sale::createFromOrder($order);
                 $order->decrementProductStock();
             } else {
@@ -253,7 +256,13 @@ class OrderController extends Controller
 
                     // Validar estado PAID, moneda PEN y monto exacto
                     if ($orderStatus === 'PAID' && $currency === 'PEN' && abs($paidAmountInCents - $expectedAmountInCents) <= 1) {
-                        $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+                        $transactionId = $answerData['transactions'][0]['transactionId'] ?? $answerData['orderDetails']['orderId'] ?? ('izipay_' . $order->id . '_' . time());
+                        $order->update([
+                            'payment_status' => 'paid',
+                            'status' => 'preparing',
+                            'transaction_id' => $transactionId,
+                            'payment_payload' => $answerData,
+                        ]);
                         Sale::createFromOrder($order);
                         $order->decrementProductStock();
                     } else {
@@ -468,7 +477,13 @@ class OrderController extends Controller
                 return response('Discrepancy in amount or currency', 400);
             }
 
-            $order->update(['payment_status' => 'paid', 'status' => 'preparing']);
+            $transactionId = $answer['transactions'][0]['transactionId'] ?? $answer['orderDetails']['orderId'] ?? ('izipay_' . $order->id . '_' . time());
+            $order->update([
+                'payment_status' => 'paid',
+                'status' => 'preparing',
+                'transaction_id' => $transactionId,
+                'payment_payload' => $answer,
+            ]);
             Sale::createFromOrder($order);
             $order->decrementProductStock();
 

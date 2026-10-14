@@ -46,8 +46,9 @@ class Sale extends Model
                 return $existing;
             }
 
-            $documentType = '03'; // Boleta
-            $series = 'B001';
+            $isFactura = ($order->invoice_type ?? '') === 'factura';
+            $documentType = $isFactura ? '01' : '03'; // 01: Factura, 03: Boleta
+            $series = $isFactura ? 'F001' : 'B001';
 
             // Bloqueo de fila para garantizar correlativos consecutivos y sin duplicados tributarios
             $lastSale = self::where('document_type', $documentType)

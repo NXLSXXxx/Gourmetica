@@ -37,10 +37,15 @@ class DisasterRecoveryDrillTest extends TestCase
         $this->artisan('audit:dr-drill', ['--target-db' => 'information_schema'])
             ->expectsOutputToContain('[BLOQUEO DE SEGURIDAD]')
             ->assertExitCode(1);
+
+        // Intento 3: nombre que no contiene keywords de prueba autorizadas (whitelist)
+        $this->artisan('audit:dr-drill', ['--target-db' => 'produccion_copia'])
+            ->expectsOutputToContain('[BLOQUEO DE SEGURIDAD]')
+            ->assertExitCode(1);
     }
 
     /**
-     * Prueba la ejecución completa del simulacro DR: volcado, restauración, RTO, RPO y verificación de consistencia.
+     * Prueba la ejecución completa del simulacro DR: volcado, restauración, RTO, RPO y verificación profunda SHA-256.
      */
     public function test_dr_drill_executes_successfully_and_verifies_data_consistency(): void
     {
@@ -71,9 +76,9 @@ class DisasterRecoveryDrillTest extends TestCase
         ]);
 
         // 2. Ejecutar el simulacro
-        $this->artisan('audit:dr-drill')
+        $this->artisan('audit:dr-drill', ['--force' => true])
             ->expectsOutputToContain('SIMULACRO DR-DRILL COMPLETADO CON EXITO')
-            ->expectsOutputToContain('RPO Medido:')
+            ->expectsOutputToContain('RPO Estimado')
             ->expectsOutputToContain('RTO Medido')
             ->expectsOutputToContain('100% de tablas y registros verificados idénticos')
             ->assertExitCode(0);

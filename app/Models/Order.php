@@ -19,9 +19,25 @@ class Order extends Model
         'payment_status',
         'delivery_zone_id',
         'delivery_price',
+        'delivery_date',
+        'delivery_time',
+        'phone',
+        'email',
+        'invoice_type',
+        'invoice_document',
+        'is_gift',
+        'has_card',
+        'has_dedication',
+        'stock_decremented',
+        'transaction_id',
+        'payment_payload',
         'nakama_id',
         'nakama_token',
         'nakama_status',
+    ];
+
+    protected $casts = [
+        'payment_payload' => 'array',
     ];
 
     public function user()

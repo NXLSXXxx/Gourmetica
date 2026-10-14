@@ -41,6 +41,8 @@ class ReconcileTransactionsTest extends TestCase
             'status' => 'preparing',
             'payment_method' => 'izipay',
             'payment_status' => 'paid',
+            'transaction_id' => 'izipay_tx_test_001',
+            'payment_payload' => ['orderDetails' => ['orderTotalAmount' => 4500]],
             'stock_decremented' => true,
         ]);
 
@@ -95,7 +97,7 @@ class ReconcileTransactionsTest extends TestCase
             'customer_name' => 'Cliente Huerfano',
             'total' => 99.00,
             'status' => 'preparing',
-            'payment_method' => 'izipay',
+            'payment_method' => 'efectivo',
             'payment_status' => 'paid',
             'stock_decremented' => false,
         ]);
@@ -107,7 +109,7 @@ class ReconcileTransactionsTest extends TestCase
             'customer_name' => 'Cliente Discrepancia',
             'total' => 100.00,
             'status' => 'preparing',
-            'payment_method' => 'izipay',
+            'payment_method' => 'efectivo',
             'payment_status' => 'paid',
             'stock_decremented' => true,
         ]);
@@ -127,6 +129,40 @@ class ReconcileTransactionsTest extends TestCase
             ->expectsOutputToContain('DETALLE DE ANOMALIAS DETECTADAS')
             ->expectsOutputToContain('PEDIDO_PAGADO_SIN_VENTA')
             ->expectsOutputToContain('DISCREPANCIA_MONTO')
+            ->assertExitCode(1);
+    }
+
+    /**
+     * Prueba que la conciliación detecte anomalías en pasarelas externas (falta de transaction_id o duplicados).
+     */
+    public function test_reconciliation_detects_external_gateway_anomalies(): void
+    {
+        // Pedido izipay pagado pero sin transaction_id
+        $orderMissingTx = Order::create([
+            'user_id' => $this->user->id,
+            'headquarter_id' => $this->hq->id,
+            'customer_name' => 'Cliente Izipay Sin TX',
+            'total' => 50.00,
+            'status' => 'preparing',
+            'payment_method' => 'izipay',
+            'payment_status' => 'paid',
+            'transaction_id' => null,
+            'stock_decremented' => true,
+        ]);
+
+        Sale::create([
+            'user_id' => $this->user->id,
+            'headquarter_id' => $this->hq->id,
+            'document_type' => '03',
+            'series' => 'B001',
+            'correlative' => 3001,
+            'total' => 50.00,
+            'status' => 'completed',
+            'order_id' => $orderMissingTx->id,
+        ]);
+
+        $this->artisan('audit:reconcile')
+            ->expectsOutputToContain('PAGO_EXTERNO_SIN_REFERENCIA')
             ->assertExitCode(1);
     }
 }

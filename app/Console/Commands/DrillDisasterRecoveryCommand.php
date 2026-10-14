@@ -18,14 +18,15 @@ class DrillDisasterRecoveryCommand extends Command
     protected $signature = 'audit:dr-drill 
                             {--target-db= : Nombre de la base de datos temporal autorizada para restaurar} 
                             {--backup-file= : Ruta específica del archivo .sql a restaurar} 
-                            {--keep-target : Conserva la base de datos de prueba tras el simulacro sin eliminarla}';
+                            {--keep-target : Conserva la base de datos de prueba tras el simulacro sin eliminarla}
+                            {--force : Ejecuta el simulacro sin solicitar confirmación interactiva}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Ejecuta un simulacro controlado de recuperación ante desastres (Disaster Recovery), midiendo RTO, RPO e integridad de datos';
+    protected $description = 'Ejecuta un simulacro controlado de recuperación ante desastres (Disaster Recovery), midiendo RTO, RPO e integridad profunda de datos';
 
     /**
      * Execute the console command.
@@ -42,7 +43,7 @@ class DrillDisasterRecoveryCommand extends Command
         $sourceDb = $connConfig['database'] ?? '';
 
         // ---------------------------------------------------------------------
-        // 1. REGLAS ESTRICTAS DE SEGURIDAD (PROTECCION DE PRODUCCION)
+        // 1. REGLAS ESTRICTAS DE SEGURIDAD (PROTECCION DE PRODUCCION Y WHITELIST)
         // ---------------------------------------------------------------------
         $targetDb = $this->option('target-db');
 
@@ -72,6 +73,32 @@ class DrillDisasterRecoveryCommand extends Command
             $this->error(" Está estrictamente prohibido realizar restauraciones sobre la base activa.");
             $this->error("-------------------------------------------------------------------------------");
             return 1;
+        }
+
+        // Whitelist obligatoria: el nombre de destino debe contener palabras de prueba autorizadas
+        $safePatterns = ['drill', 'test', 'temp', 'staging', 'sandbox', 'tmp'];
+        $hasSafeKeyword = false;
+        foreach ($safePatterns as $pattern) {
+            if (str_contains(strtolower((string)$targetDb), $pattern)) {
+                $hasSafeKeyword = true;
+                break;
+            }
+        }
+
+        if (!$hasSafeKeyword) {
+            $this->error("-------------------------------------------------------------------------------");
+            $this->error(" [BLOQUEO DE SEGURIDAD]: Destino no autorizado '{$targetDb}'.");
+            $this->error(" Para prevenir accidentes, el destino debe contener explícitamente un prefijo o");
+            $this->error(" sufijo de prueba autorizado: 'drill', 'test', 'staging', 'temp' o 'sandbox'.");
+            $this->error("-------------------------------------------------------------------------------");
+            return 1;
+        }
+
+        if (!$this->option('force') && $this->input->isInteractive()) {
+            if (!$this->confirm("¿Confirma la ejecución del simulacro DR sobre la base '{$targetDb}'? (Se reinicializarán sus tablas)", true)) {
+                $this->warn("Simulacro cancelado por el usuario.");
+                return 0;
+            }
         }
 
         $this->line(" Base de datos origen (Producción): <fg=cyan>{$sourceDb}</>");
@@ -109,8 +136,8 @@ class DrillDisasterRecoveryCommand extends Command
 
             // Medición de RPO (Recovery Point Objective): Diferencia entre la última transacción y el respaldo
             $rpoMetrics = $this->calculateRpo($backupFilePath);
-            $this->line(" [OK] RPO Medido: <fg=cyan>{$rpoMetrics['rpo_seconds']} segundos</> ({$rpoMetrics['rpo_human']})");
-            $this->line("      Última transacción detectada: {$rpoMetrics['last_tx_time']}");
+            $this->line(" [OK] RPO Estimado de Base de Datos: <fg=cyan>{$rpoMetrics['rpo_seconds']} segundos</> ({$rpoMetrics['rpo_human']})");
+            $this->line("      Última actividad transaccional detectada en DB: {$rpoMetrics['last_tx_time']}");
             $this->newLine();
 
             // -----------------------------------------------------------------
@@ -131,17 +158,18 @@ class DrillDisasterRecoveryCommand extends Command
 
             $endTime = hrtime(true);
             $rtoSeconds = round(($endTime - $startTime) / 1e9, 4);
-            $this->line(" [OK] RTO Medido (Tiempo de Restauración): <fg=cyan>{$rtoSeconds} segundos</>");
+            $this->line(" [OK] RTO Medido (Restauración del Motor de BD): <fg=cyan>{$rtoSeconds} segundos</>");
+            $this->line("      (Tiempo medido de importación, DDL/DML e indexación en el motor MySQL/MariaDB)");
             $this->newLine();
 
             // -----------------------------------------------------------------
-            // 5. AUDITORIA Y VERIFICACION DE INTEGRIDAD (SOURCE vs TARGET)
+            // 5. AUDITORIA Y VERIFICACION DE INTEGRIDAD PROFUNDA (SOURCE vs TARGET)
             // -----------------------------------------------------------------
-            $this->line("<fg=yellow;options=bold>--- PASO 4: AUDITORIA DE INTEGRIDAD Y CONSISTENCIA DE DATOS ---</>");
+            $this->line("<fg=yellow;options=bold>--- PASO 4: AUDITORIA DE INTEGRIDAD PROFUNDA Y CONSISTENCIA DE DATOS ---</>");
             $comparison = $this->verifyDataConsistency($driver, $sourceDb, $targetDb, $targetPdo);
 
             $this->table(
-                ['Tabla', 'Filas Origen', 'Filas Restauradas', 'Checksum Origen', 'Checksum Destino', 'Estado'],
+                ['Tabla', 'Filas Origen', 'Filas Rest.', 'Checksum ID', 'Hash Contenido SHA-256', 'Estado'],
                 $comparison['rows']
             );
 
@@ -150,7 +178,7 @@ class DrillDisasterRecoveryCommand extends Command
                 return 1;
             }
 
-            $this->line(" [OK] Consistencia de Datos: <fg=green>100% de tablas y registros verificados idénticos</>");
+            $this->line(" [OK] Consistencia de Datos: <fg=green>100% de tablas y registros verificados idénticos (Filas, Claves y Hash SHA-256 de contenido)</>");
             $this->newLine();
 
             // -----------------------------------------------------------------
@@ -166,7 +194,8 @@ class DrillDisasterRecoveryCommand extends Command
 
             $this->newLine();
             $this->info("===============================================================================");
-            $this->info("   SIMULACRO DR-DRILL COMPLETADO CON EXITO (RTO: {$rtoSeconds}s | RPO: {$rpoMetrics['rpo_seconds']}s)   ");
+            $this->info("   SIMULACRO DR-DRILL COMPLETADO CON EXITO (RTO BD: {$rtoSeconds}s | RPO Estimado: {$rpoMetrics['rpo_seconds']}s)   ");
+            $this->info("   (Nota: Recuperación total del host web completo requiere aprovisionamiento de red/DNS)");
             $this->info("===============================================================================");
 
             return 0;
@@ -444,17 +473,25 @@ class DrillDisasterRecoveryCommand extends Command
                 $targetIdSum = 0;
             }
 
-            $matches = ($sourceCount === $targetCount) && ($sourceIdSum === $targetIdSum);
+            // Verificación profunda: Hash SHA-256 de filas y columnas completas
+            $sourceContentHash = $this->computeSourceTableHash($table);
+            $targetContentHash = $this->computeTargetTableHash($targetPdo, $table);
+
+            $matches = ($sourceCount === $targetCount) && ($sourceIdSum === $targetIdSum) && ($sourceContentHash === $targetContentHash);
             if (!$matches) {
                 $allPassed = false;
             }
+
+            $hashDisplay = ($sourceContentHash === $targetContentHash)
+                ? '<fg=green>MATCH (' . substr($sourceContentHash, 0, 8) . ')</>'
+                : '<fg=red>' . substr($sourceContentHash, 0, 6) . ' != ' . substr($targetContentHash, 0, 6) . '</>';
 
             $rows[] = [
                 $table,
                 $sourceCount,
                 $targetCount,
                 $sourceIdSum,
-                $targetIdSum,
+                $hashDisplay,
                 $matches ? '<fg=green>PASS</>' : '<fg=red>DISCREPANCIA</>',
             ];
         }
@@ -463,6 +500,48 @@ class DrillDisasterRecoveryCommand extends Command
             'passed' => $allPassed,
             'rows'   => $rows,
         ];
+    }
+
+    /**
+     * Calcula un hash criptográfico SHA-256 de todas las filas y columnas de la tabla en origen.
+     */
+    protected function computeSourceTableHash(string $table): string
+    {
+        $rows = DB::table($table)->orderBy(DB::raw('1'))->get();
+        if ($rows->isEmpty()) {
+            return 'EMPTY';
+        }
+
+        $hashCtx = hash_init('sha256');
+        foreach ($rows as $row) {
+            $normalized = array_map(fn($v) => is_null($v) ? 'NULL' : (string)$v, (array)$row);
+            hash_update($hashCtx, json_encode($normalized));
+        }
+
+        return hash_final($hashCtx);
+    }
+
+    /**
+     * Calcula un hash criptográfico SHA-256 de todas las filas y columnas de la tabla en destino.
+     */
+    protected function computeTargetTableHash(PDO $targetPdo, string $table): string
+    {
+        $stmt = $targetPdo->query("SELECT * FROM `{$table}` ORDER BY 1");
+        if (!$stmt) {
+            return 'ERROR';
+        }
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($rows)) {
+            return 'EMPTY';
+        }
+
+        $hashCtx = hash_init('sha256');
+        foreach ($rows as $row) {
+            $normalized = array_map(fn($v) => is_null($v) ? 'NULL' : (string)$v, $row);
+            hash_update($hashCtx, json_encode($normalized));
+        }
+
+        return hash_final($hashCtx);
     }
 
     /**
