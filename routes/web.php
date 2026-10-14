@@ -32,7 +32,7 @@ Route::get('/shop/category/{slug}', [ShopController::class, 'getByCategory'])->n
 Route::get('/shop/product/{slug}', [ShopController::class, 'show'])->name('shop.product');
 Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('shop.cart');
 Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');
-Route::get('/cart/remove/{key}', [\App\Http\Controllers\CartController::class, 'remove'])->name('cart.remove');
+Route::match(['post', 'delete'], '/cart/remove/{key}', [\App\Http\Controllers\CartController::class, 'remove'])->name('cart.remove');
 Route::post('/select-headquarter', function(\Illuminate\Http\Request $request) {
     $request->validate([
         'headquarter_id' => 'required|exists:headquarters,id'
