@@ -423,10 +423,11 @@ class DrillDisasterRecoveryCommand extends Command
 
         foreach ($sourceTables as $table) {
             // Métricas en origen
-            $sourceCount = DB::table($table)->count();
+            $sourceCount = (int) DB::table($table)->count();
             $sourceIdSum = 0;
             if (Schema::hasColumn($table, 'id')) {
-                $sourceIdSum = DB::table($table)->sum('id') ?? 0;
+                $rawSum = DB::table($table)->sum('id');
+                $sourceIdSum = $rawSum !== null ? (int)$rawSum : 0;
             }
 
             // Métricas en destino
