@@ -59,24 +59,29 @@ class User extends Authenticatable
     /**
      * Helpers
      */
-    public function isAdmin()
+    public function isAdmin(): bool
     {
-        return $this->role->slug === 'admin_general';
+        return $this->role?->slug === 'admin_general';
     }
 
-    public function isSedeAdmin()
+    public function isSedeAdmin(): bool
     {
-        return $this->role->slug === 'admin_sede';
+        return $this->role?->slug === 'admin_sede';
     }
 
-    public function isCajero()
+    public function isCajero(): bool
     {
-        return $this->role->slug === 'cajero';
+        return $this->role?->slug === 'cajero';
     }
 
-    public function isIngeniero()
+    public function isIngeniero(): bool
     {
-        return $this->role->slug === 'ingeniero';
+        return $this->role?->slug === 'ingeniero';
+    }
+
+    public function isClient(): bool
+    {
+        return $this->role?->slug === 'cliente';
     }
 
     public function scopeClients($query)

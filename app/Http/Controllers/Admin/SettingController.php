@@ -11,9 +11,7 @@ class SettingController extends Controller
 {
     public function index()
     {
-        if (!auth('admin')->user()->isIngeniero() && !auth('admin')->user()->isAdmin()) {
-            abort(403, 'No tienes permiso para acceder a la configuración.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-settings');
 
         $settings = [
             'sunat_ruc' => Setting::get('sunat_ruc', '20123456789'),
@@ -40,29 +38,10 @@ class SettingController extends Controller
 
     public function update(Request $request)
     {
-        if (!auth('admin')->user()->isIngeniero() && !auth('admin')->user()->isAdmin()) {
-            abort(403, 'No tienes permiso para realizar esta acción.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-settings');
 
-        $allowedKeys = [
-            'company_name',
-            'company_address',
-            'contact_whatsapp',
-            'contact_email',
-            'contact_phone',
-            'store_open_time',
-            'store_close_time',
-            'delivery_days_advance',
-            'delivery_time_slots'
-        ];
-
-        if (!auth('admin')->user()->isIngeniero()) {
-            // General admin can only update company, contact and store schedule settings
-            $requestData = $request->only($allowedKeys);
-        } else {
-            // Engineer can update everything
-            $requestData = $request->except(['_token', 'sunat_certificate']);
-            // Handle checkbox for nakama_enabled explicitly
+        $requestData = $request->except(['_token', 'sunat_certificate']);
+        if ($request->has('nakama_enabled') || $request->has('store_open_time')) {
             $requestData['nakama_enabled'] = $request->has('nakama_enabled') ? '1' : '0';
         }
 
@@ -81,7 +60,7 @@ class SettingController extends Controller
             Setting::set($key, $value, $group);
         }
 
-        if (auth('admin')->user()->isIngeniero() && $request->hasFile('sunat_certificate')) {
+        if ($request->hasFile('sunat_certificate')) {
             $path = $request->file('sunat_certificate')->storeAs('sunat', 'certificate.pem');
             Setting::set('sunat_certificate_path', $path, 'sunat');
         }

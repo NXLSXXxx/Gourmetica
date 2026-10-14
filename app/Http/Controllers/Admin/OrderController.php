@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use App\Models\Order;
 
 class OrderController extends Controller
 {
     public function index()
     {
+        Gate::authorize('viewAny', Order::class);
+
         $user = auth('admin')->user();
-        $query = \App\Models\Order::with(['user', 'headquarter'])->latest();
+        $query = Order::with(['user', 'headquarter'])->latest();
 
         if ($user->isSedeAdmin() || $user->isCajero()) {
             $query->where('headquarter_id', $user->headquarter_id);
@@ -22,24 +26,16 @@ class OrderController extends Controller
 
     public function show($id)
     {
-        $user = auth('admin')->user();
-        $order = \App\Models\Order::with(['user', 'headquarter', 'items.product'])->findOrFail($id);
-
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            abort(403, 'No tienes permiso para ver este pedido.');
-        }
+        $order = Order::with(['user', 'headquarter', 'items.product'])->findOrFail($id);
+        Gate::authorize('view', $order);
 
         return view('admin.orders.show', compact('order'));
     }
 
     public function updateStatus(Request $request, $id)
     {
-        $order = \App\Models\Order::findOrFail($id);
-        $user = auth('admin')->user();
-        
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            abort(403, 'No tienes permiso para modificar este pedido.');
-        }
+        $order = Order::findOrFail($id);
+        Gate::authorize('update', $order);
         
         $updateData = ['status' => $request->status];
         if ($request->status === 'delivered') {
@@ -68,12 +64,8 @@ class OrderController extends Controller
 
     public function printTicket($id)
     {
-        $user = auth('admin')->user();
-        $order = \App\Models\Order::with(['user', 'headquarter', 'items.product'])->findOrFail($id);
-
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            abort(403, 'No tienes permiso para imprimir este pedido.');
-        }
+        $order = Order::with(['user', 'headquarter', 'items.product'])->findOrFail($id);
+        Gate::authorize('printTicket', $order);
 
         return view('admin.orders.ticket', compact('order'));
     }

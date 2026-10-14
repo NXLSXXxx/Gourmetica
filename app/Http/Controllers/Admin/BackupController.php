@@ -18,9 +18,7 @@ class BackupController extends Controller
 
     public function index()
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403, 'Acceso exclusivo para rol Ingeniero.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-technical');
 
         if (!file_exists($this->backupDir)) {
             mkdir($this->backupDir, 0755, true);
@@ -54,9 +52,7 @@ class BackupController extends Controller
      */
     public function create()
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403, 'Acceso exclusivo para rol Ingeniero.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-technical');
 
         if (!file_exists($this->backupDir)) {
             mkdir($this->backupDir, 0755, true);
@@ -159,9 +155,7 @@ class BackupController extends Controller
      */
     public function download(string $filename)
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403, 'Acceso exclusivo para rol Ingeniero.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-technical');
 
         // Sanitizar el nombre del archivo para prevenir Path Traversal
         $safeFilename = basename($filename);
@@ -181,9 +175,7 @@ class BackupController extends Controller
      */
     public function destroy(string $filename)
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403, 'Acceso exclusivo para rol Ingeniero.');
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-technical');
 
         $safeFilename = basename($filename);
         $filePath = $this->backupDir . '/' . $safeFilename;

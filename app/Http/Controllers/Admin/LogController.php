@@ -9,9 +9,7 @@ class LogController extends Controller
 {
     public function index()
     {
-        if (!auth('admin')->user()->isIngeniero()) {
-            abort(403);
-        }
+        \Illuminate\Support\Facades\Gate::authorize('manage-technical');
 
         $logPath = storage_path('logs/laravel.log');
         $logs = [];

@@ -112,28 +112,39 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
     Route::get('/clients/{id}', [ClientController::class, 'show'])->name('admin.clients.show');
     Route::resource('/products', ProductController::class)->names('admin.products');
     Route::resource('/categories', CategoryController::class)->names('admin.categories');
-    Route::resource('/headquarters', \App\Http\Controllers\Admin\HeadquarterController::class)->names('admin.headquarters');
+    Route::middleware(['can:manage-headquarters'])->group(function () {
+        Route::resource('/headquarters', \App\Http\Controllers\Admin\HeadquarterController::class)->names('admin.headquarters');
+    });
     Route::resource('/banners', \App\Http\Controllers\Admin\BannerController::class)->names('admin.banners');
-    Route::resource('/delivery-zones', \App\Http\Controllers\Admin\DeliveryZoneController::class)->names('admin.delivery_zones');
-    Route::get('/orders', [AdminOrderController::class, 'index'])->name('admin.orders.index');
-    Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
-    Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.update_status');
-    Route::get('/orders/{id}/ticket', [AdminOrderController::class, 'printTicket'])->name('admin.orders.ticket');
-    Route::get('/sales', [\App\Http\Controllers\Admin\SaleController::class, 'index'])->name('admin.sales.index');
-    Route::post('/sales/direct', [\App\Http\Controllers\Admin\SaleController::class, 'storeDirect'])->name('admin.sales.store_direct');
-    Route::get('/live-orders', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrders'])->name('admin.live_orders.index');
-    Route::post('/live-orders/store', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersStore'])->name('admin.live_orders.store');
-    Route::post('/live-orders/update-status', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersUpdateStatus'])->name('admin.live_orders.update_status');
-    Route::post('/live-orders/cancel', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersCancel'])->name('admin.live_orders.cancel');
-    Route::post('/sales/{id}/declare', [\App\Http\Controllers\Admin\SaleController::class, 'declareToSunat'])->name('admin.sales.declare');
+    Route::middleware(['can:manage-delivery-zones'])->group(function () {
+        Route::resource('/delivery-zones', \App\Http\Controllers\Admin\DeliveryZoneController::class)->names('admin.delivery_zones');
+    });
+    Route::middleware(['can:manage-orders-sales'])->group(function () {
+        Route::get('/orders', [AdminOrderController::class, 'index'])->name('admin.orders.index');
+        Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
+        Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.update_status');
+        Route::get('/orders/{id}/ticket', [AdminOrderController::class, 'printTicket'])->name('admin.orders.ticket');
+        Route::get('/sales', [\App\Http\Controllers\Admin\SaleController::class, 'index'])->name('admin.sales.index');
+        Route::post('/sales/direct', [\App\Http\Controllers\Admin\SaleController::class, 'storeDirect'])->name('admin.sales.store_direct');
+        Route::post('/sales/{id}/declare', [\App\Http\Controllers\Admin\SaleController::class, 'declareToSunat'])->name('admin.sales.declare');
 
-    Route::get('/catering', [\App\Http\Controllers\Admin\CateringController::class, 'index'])->name('admin.catering.index');
-    Route::get('/catering/{cateringRequest}', [\App\Http\Controllers\Admin\CateringController::class, 'show'])->name('admin.catering.show');
-    Route::patch('/catering/{cateringRequest}/status', [\App\Http\Controllers\Admin\CateringController::class, 'updateStatus'])->name('admin.catering.update_status');
+        Route::get('/catering', [\App\Http\Controllers\Admin\CateringController::class, 'index'])->name('admin.catering.index');
+        Route::get('/catering/{cateringRequest}', [\App\Http\Controllers\Admin\CateringController::class, 'show'])->name('admin.catering.show');
+        Route::patch('/catering/{cateringRequest}/status', [\App\Http\Controllers\Admin\CateringController::class, 'updateStatus'])->name('admin.catering.update_status');
+    });
+
+    Route::middleware(['can:operate-cashier'])->group(function () {
+        Route::get('/live-orders', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrders'])->name('admin.live_orders.index');
+        Route::post('/live-orders/store', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersStore'])->name('admin.live_orders.store');
+        Route::post('/live-orders/update-status', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersUpdateStatus'])->name('admin.live_orders.update_status');
+        Route::post('/live-orders/cancel', [\App\Http\Controllers\Admin\SaleController::class, 'liveOrdersCancel'])->name('admin.live_orders.cancel');
+    });
 
     Route::resource('/purchases', \App\Http\Controllers\Admin\PurchaseController::class)->names('admin.purchases');
     
-    Route::resource('/users', \App\Http\Controllers\Admin\UserController::class)->names('admin.users');
+    Route::middleware(['can:manage-users'])->group(function () {
+        Route::resource('/users', \App\Http\Controllers\Admin\UserController::class)->names('admin.users');
+    });
     
     // Insumos y Recetas
     Route::resource('/supplies', \App\Http\Controllers\Admin\SupplyController::class)->names('admin.supplies');
@@ -145,14 +156,22 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
     Route::get('/productions/create', [\App\Http\Controllers\Admin\ProductionController::class, 'create'])->name('admin.productions.create');
     Route::post('/productions', [\App\Http\Controllers\Admin\ProductionController::class, 'store'])->name('admin.productions.store');
 
-    Route::get('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'index'])->name('admin.settings.index');
-    Route::patch('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'update'])->name('admin.settings.update');
-    Route::get('/logs', [\App\Http\Controllers\Admin\LogController::class, 'index'])->name('admin.logs.index');
-    Route::get('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'index'])->name('admin.backups.index');
-    Route::post('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'create'])->name('admin.backups.create');
-    Route::get('/backups/download/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'download'])->name('admin.backups.download');
-    Route::delete('/backups/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'destroy'])->name('admin.backups.destroy');
-    Route::get('/audits', [\App\Http\Controllers\Admin\AuditController::class, 'index'])->name('admin.audits.index');
+    Route::middleware(['can:manage-settings'])->group(function () {
+        Route::get('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'index'])->name('admin.settings.index');
+        Route::patch('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'update'])->name('admin.settings.update');
+    });
+
+    Route::middleware(['can:manage-technical'])->group(function () {
+        Route::get('/logs', [\App\Http\Controllers\Admin\LogController::class, 'index'])->name('admin.logs.index');
+        Route::get('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'index'])->name('admin.backups.index');
+        Route::post('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'create'])->name('admin.backups.create');
+        Route::get('/backups/download/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'download'])->name('admin.backups.download');
+        Route::delete('/backups/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'destroy'])->name('admin.backups.destroy');
+    });
+
+    Route::middleware(['can:view-audits'])->group(function () {
+        Route::get('/audits', [\App\Http\Controllers\Admin\AuditController::class, 'index'])->name('admin.audits.index');
+    });
 });
 
 // Webhook para integración con Nakama Delivery

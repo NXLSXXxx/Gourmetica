@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Sale;
+use App\Models\Order;
 use App\Services\SunatService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class SaleController extends Controller
 {
     public function index()
     {
+        Gate::authorize('viewAny', Sale::class);
+
         $user = auth('admin')->user();
         $query = Sale::with(['user', 'headquarter'])->latest();
 
@@ -46,6 +50,8 @@ class SaleController extends Controller
             'products.*.id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
         ]);
+
+        Gate::authorize('create', [Sale::class, (int)$request->headquarter_id]);
 
         $user = auth('admin')->user();
         if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== (int)$request->headquarter_id) {
@@ -89,6 +95,7 @@ class SaleController extends Controller
     public function declareToSunat($id, SunatService $sunatService)
     {
         $sale = Sale::findOrFail($id);
+        Gate::authorize('declare', $sale);
 
         if ($sale->sunat_status === 'ACEPTADO') {
             return back()->with('info', 'Esta venta ya fue declarada y aceptada.');
@@ -118,19 +125,25 @@ class SaleController extends Controller
 
     public function liveOrders(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $user = auth('admin')->user();
 
-        $hqQuery = \App\Models\Headquarter::where('is_active', true);
         if ($user->isSedeAdmin() || $user->isCajero()) {
-            $hqQuery->where('id', $user->headquarter_id);
+            if ($request->filled('hq_id') && (int)$request->input('hq_id') !== (int)$user->headquarter_id) {
+                if ($request->ajax()) {
+                    return response()->json(['message' => 'No tienes permiso para acceder a las operaciones de caja de otra sede.'], 403);
+                }
+                abort(403, 'No tienes permiso para acceder a las operaciones de caja de otra sede.');
+            }
+            $hqId = (int)$user->headquarter_id;
+            $hqQuery = \App\Models\Headquarter::where('id', $hqId);
+        } else {
+            $hqQuery = \App\Models\Headquarter::where('is_active', true);
+            $hqId = (int)($request->input('hq_id') ?: (\App\Models\Headquarter::where('is_active', true)->first()->id ?? 1));
         }
-        $headquarters = $hqQuery->get();
 
-        // Get live orders for the headquarter
-        $hqId = $request->input('hq_id');
-        if (!$hqId) {
-            $hqId = ($user->isSedeAdmin() || $user->isCajero()) ? $user->headquarter_id : ($headquarters->first()->id ?? 1);
-        }
+        $headquarters = $hqQuery->get();
 
         $products = \App\Models\Product::with(['category', 'headquarters', 'options.values'])
             ->where('is_active', true)
@@ -159,6 +172,8 @@ class SaleController extends Controller
 
     public function liveOrdersStore(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         // This is for quick purchases (compra rapida) directly at the headquarter
         $request->validate([
             'headquarter_id' => 'required|exists:headquarters,id',
@@ -318,16 +333,15 @@ class SaleController extends Controller
 
     public function liveOrdersUpdateStatus(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $request->validate([
             'order_id' => 'required|exists:orders,id',
             'status' => 'required|in:pending,preparing,shipped,delivered,cancelled',
         ]);
 
-        $order = \App\Models\Order::findOrFail($request->order_id);
-        $user = auth('admin')->user();
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
-        }
+        $order = Order::findOrFail($request->order_id);
+        Gate::authorize('update', $order);
 
         $isDelivery = $order->delivery_zone_id || $order->delivery_price > 0;
         // Removido temporalmente el bloqueo estricto para permitir Forzar Entrega Manual en caso de fallos de Webhook locales.
@@ -367,15 +381,14 @@ class SaleController extends Controller
 
     public function liveOrdersCancel(Request $request)
     {
+        Gate::authorize('operate-cashier');
+
         $request->validate([
             'order_id' => 'required|exists:orders,id',
         ]);
 
-        $order = \App\Models\Order::findOrFail($request->order_id);
-        $user = auth('admin')->user();
-        if (($user->isSedeAdmin() || $user->isCajero()) && $user->headquarter_id !== $order->headquarter_id) {
-            return response()->json(['success' => false, 'message' => 'No tienes permiso.'], 403);
-        }
+        $order = Order::findOrFail($request->order_id);
+        Gate::authorize('cancel', $order);
 
         $hqId = $order->headquarter_id;
         
