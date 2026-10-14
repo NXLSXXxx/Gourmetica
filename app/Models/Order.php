@@ -46,23 +46,37 @@ class Order extends Model
 
     public function decrementProductStock()
     {
-        if ($this->stock_decremented) {
-            return;
-        }
+        return \Illuminate\Support\Facades\DB::transaction(function () {
+            // Bloqueo de fila para evitar condiciones de carrera entre peticiones simultáneas
+            $order = self::where('id', $this->id)->lockForUpdate()->first();
+            if (!$order || $order->stock_decremented) {
+                return;
+            }
 
-        foreach ($this->items as $item) {
-            $product = $item->product;
-            if ($product) {
-                $hqRelation = $product->headquarters()->where('headquarter_id', $this->headquarter_id)->first();
-                if ($hqRelation) {
-                    $currentStock = $hqRelation->pivot->stock;
-                    $newStock = max(0, $currentStock - intval($item->quantity));
-                    $product->headquarters()->updateExistingPivot($this->headquarter_id, ['stock' => $newStock]);
+            foreach ($order->items()->lockForUpdate()->get() as $item) {
+                $product = $item->product;
+                if ($product) {
+                    $pivotRow = \Illuminate\Support\Facades\DB::table('headquarter_product')
+                        ->where('product_id', $item->product_id)
+                        ->where('headquarter_id', $order->headquarter_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($pivotRow) {
+                        $qty = intval($item->quantity);
+                        $currentStock = (int)$pivotRow->stock;
+                        $newStock = max(0, $currentStock - $qty);
+
+                        \Illuminate\Support\Facades\DB::table('headquarter_product')
+                            ->where('id', $pivotRow->id)
+                            ->update(['stock' => $newStock]);
+                    }
                 }
             }
-        }
 
-        $this->stock_decremented = true;
-        $this->save();
+            $order->stock_decremented = true;
+            $order->save();
+            $this->stock_decremented = true;
+        });
     }
 }

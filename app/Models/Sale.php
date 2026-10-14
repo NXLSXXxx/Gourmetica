@@ -40,31 +40,35 @@ class Sale extends Model
 
     public static function createFromOrder($order)
     {
-        $existing = self::where('order_id', $order->id)->first();
-        if ($existing) {
-            return $existing;
-        }
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($order) {
+            $existing = self::where('order_id', $order->id)->lockForUpdate()->first();
+            if ($existing) {
+                return $existing;
+            }
 
-        $documentType = '03'; // Boleta
-        $series = 'B001';
+            $documentType = '03'; // Boleta
+            $series = 'B001';
 
-        $lastSale = self::where('document_type', $documentType)
-            ->where('series', $series)
-            ->orderBy('correlative', 'desc')
-            ->first();
+            // Bloqueo de fila para garantizar correlativos consecutivos y sin duplicados tributarios
+            $lastSale = self::where('document_type', $documentType)
+                ->where('series', $series)
+                ->orderBy('correlative', 'desc')
+                ->lockForUpdate()
+                ->first();
 
-        $correlative = $lastSale ? $lastSale->correlative + 1 : 1;
+            $correlative = $lastSale ? $lastSale->correlative + 1 : 1;
 
-        return self::create([
-            'user_id' => $order->user_id,
-            'headquarter_id' => $order->headquarter_id,
-            'document_type' => $documentType,
-            'series' => $series,
-            'correlative' => $correlative,
-            'total' => $order->total,
-            'status' => 'completed',
-            'sunat_status' => 'pending',
-            'order_id' => $order->id,
-        ]);
+            return self::create([
+                'user_id' => $order->user_id,
+                'headquarter_id' => $order->headquarter_id,
+                'document_type' => $documentType,
+                'series' => $series,
+                'correlative' => $correlative,
+                'total' => $order->total,
+                'status' => 'completed',
+                'sunat_status' => 'pending',
+                'order_id' => $order->id,
+            ]);
+        });
     }
 }

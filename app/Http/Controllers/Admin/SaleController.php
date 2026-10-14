@@ -203,65 +203,87 @@ class SaleController extends Controller
             $userId = $customer->id;
         }
 
-        // Create Order
-        $order = \App\Models\Order::create([
-            'user_id' => $userId,
-            'customer_name' => $orderCustomerName,
-            'headquarter_id' => $request->headquarter_id,
-            'total' => $request->total,
-            'status' => $orderType === 'whatsapp' ? 'pending' : 'delivered',
-            'address' => $orderType === 'whatsapp' ? ($request->address ?: 'Recojo') : 'Compra Rápida - Sede',
-            'payment_method' => $orderType === 'whatsapp' ? 'Efectivo' : 'Efectivo',
-            'payment_status' => $orderType === 'whatsapp' ? 'pending' : 'paid',
-            'delivery_price' => $orderType === 'whatsapp' ? ($request->delivery_price ?? 0) : 0,
-        ]);
+        // Recalcular precios de ítems y total estrictamente en el servidor
+        $verifiedItems = [];
+        $calculatedTotal = 0;
+        $hqId = (int)$request->headquarter_id;
 
-        // Save order items
-        foreach ($request->items as $item) {
-            $order->items()->create([
-                'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'options' => $item['options'] ?? null,
+        foreach ($request->items as $rawItem) {
+            $product = \App\Models\Product::findOrFail($rawItem['product_id']);
+            $unitPrice = (float)$product->getPriceForHeadquarter($hqId);
+
+            if (!empty($rawItem['options']) && is_array($rawItem['options'])) {
+                $optValues = \App\Models\ProductOptionValue::whereIn('id', array_values($rawItem['options']))->get();
+                $unitPrice += (float)$optValues->sum('price_modifier');
+            }
+
+            $qty = max(1, (int)$rawItem['quantity']);
+            $calculatedTotal += ($unitPrice * $qty);
+
+            $verifiedItems[] = [
+                'product_id' => $product->id,
+                'quantity' => $qty,
+                'price' => $unitPrice,
+                'options' => $rawItem['options'] ?? null,
+            ];
+        }
+
+        $deliveryPrice = $orderType === 'whatsapp' ? max(0, (float)($request->delivery_price ?? 0)) : 0;
+        $calculatedTotal += $deliveryPrice;
+
+        // Ejecutar creación del pedido, items, descuento de stock y venta en una sola transacción atómica
+        $sale = null;
+        $order = \Illuminate\Support\Facades\DB::transaction(function () use (
+            $userId, $orderCustomerName, $request, $calculatedTotal, $orderType, $deliveryPrice, $verifiedItems, &$sale
+        ) {
+            $order = \App\Models\Order::create([
+                'user_id' => $userId,
+                'customer_name' => $orderCustomerName,
+                'headquarter_id' => $request->headquarter_id,
+                'total' => $calculatedTotal,
+                'status' => $orderType === 'whatsapp' ? 'pending' : 'delivered',
+                'address' => $orderType === 'whatsapp' ? ($request->address ?: 'Recojo') : 'Compra Rápida - Sede',
+                'payment_method' => 'Efectivo',
+                'payment_status' => $orderType === 'whatsapp' ? 'pending' : 'paid',
+                'delivery_price' => $deliveryPrice,
             ]);
-        }
-        
-        // Use the model method to decrement stock to keep idempotence
-        if ($orderType === 'salon') {
-            $order->decrementProductStock();
-        }
 
-        if ($orderType === 'whatsapp') {
-            return response()->json([
-                'success' => true,
-                'message' => 'Pedido de WhatsApp registrado en cocina.',
-                'live_orders' => $this->getLiveOrdersData($request->headquarter_id),
-            ]);
-        }
+            foreach ($verifiedItems as $vItem) {
+                $order->items()->create($vItem);
+            }
 
-        // Create Sale ONLY for Salon orders immediately
-        $documentType = $request->document_type;
-        $series = $documentType === '01' ? 'F001' : 'B001';
+            // Descontar inventario de forma segura
+            if ($orderType === 'salon') {
+                $order->decrementProductStock();
 
-        $lastSale = Sale::where('document_type', $documentType)
-            ->where('series', $series)
-            ->orderBy('correlative', 'desc')
-            ->first();
+                $documentType = $request->document_type ?: '03';
+                $series = $documentType === '01' ? 'F001' : 'B001';
 
-        $correlative = $lastSale ? $lastSale->correlative + 1 : 500;
+                // Bloqueo de fila para evitar duplicados de correlativo en cajas concurrentes
+                $lastSale = Sale::where('document_type', $documentType)
+                    ->where('series', $series)
+                    ->orderBy('correlative', 'desc')
+                    ->lockForUpdate()
+                    ->first();
 
-        $sale = Sale::create([
-            'user_id' => $userId,
-            'headquarter_id' => $request->headquarter_id,
-            'document_type' => $documentType,
-            'series' => $series,
-            'correlative' => $correlative,
-            'total' => $request->total,
-            'status' => 'completed',
-            'sunat_status' => 'pending',
-            'order_id' => $order->id,
-            'table_number' => null, // No more tables
-        ]);
+                $correlative = $lastSale ? $lastSale->correlative + 1 : 500;
+
+                $sale = Sale::create([
+                    'user_id' => $userId,
+                    'headquarter_id' => $request->headquarter_id,
+                    'document_type' => $documentType,
+                    'series' => $series,
+                    'correlative' => $correlative,
+                    'total' => $calculatedTotal,
+                    'status' => 'completed',
+                    'sunat_status' => 'pending',
+                    'order_id' => $order->id,
+                    'table_number' => null,
+                ]);
+            }
+
+            return $order;
+        });
 
         // Auto declare to SUNAT via SOAP
         $sunatService = new SunatService();
