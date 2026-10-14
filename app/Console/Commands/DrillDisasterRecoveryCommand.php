@@ -120,22 +120,57 @@ class DrillDisasterRecoveryCommand extends Command
         $backupFilePath = $this->option('backup-file');
         if (!empty($backupFilePath)) {
             $rawPath = $backupFilePath;
-            $candidates = [$rawPath];
-            if (str_starts_with($rawPath, '~/')) {
-                $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
-                if (!empty($home)) {
+            $baseName = basename($rawPath);
+            $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+
+            $candidates = [
+                $rawPath,
+                base_path($rawPath),
+                base_path('~/' . $baseName),
+                base_path($baseName),
+                storage_path('app/backups/' . $baseName),
+            ];
+
+            if (!empty($home)) {
+                $candidates[] = rtrim($home, '/') . '/' . $baseName;
+                $candidates[] = rtrim($home, '/') . '/Gourmetica/~/' . $baseName;
+                $candidates[] = rtrim($home, '/') . '/Gourmetica/' . $baseName;
+                if (str_starts_with($rawPath, '~/')) {
                     $candidates[] = rtrim($home, '/') . '/' . substr($rawPath, 2);
                 }
-                $candidates[] = base_path($rawPath);
-                $candidates[] = base_path(substr($rawPath, 2));
             }
-            $candidates[] = storage_path('app/backups/' . basename($rawPath));
-            $candidates[] = base_path(basename($rawPath));
 
+            $resolved = false;
             foreach ($candidates as $cand) {
-                if (file_exists($cand)) {
-                    $backupFilePath = $cand;
+                if (!empty($cand) && file_exists($cand) && is_file($cand)) {
+                    $backupFilePath = realpath($cand) ?: $cand;
+                    $resolved = true;
                     break;
+                }
+            }
+
+            if (!$resolved) {
+                $searchPatterns = [
+                    base_path('*' . $baseName),
+                    base_path('~/*' . $baseName),
+                    storage_path('app/backups/*' . $baseName),
+                ];
+                if (!empty($home)) {
+                    $searchPatterns[] = rtrim($home, '/') . '/*' . $baseName;
+                    $searchPatterns[] = rtrim($home, '/') . '/Gourmetica/*' . $baseName;
+                    $searchPatterns[] = rtrim($home, '/') . '/Gourmetica/~/*' . $baseName;
+                }
+                foreach ($searchPatterns as $pattern) {
+                    $matches = glob($pattern);
+                    if (!empty($matches)) {
+                        foreach ($matches as $m) {
+                            if (file_exists($m) && is_file($m)) {
+                                $backupFilePath = realpath($m) ?: $m;
+                                $resolved = true;
+                                break 2;
+                            }
+                        }
+                    }
                 }
             }
         }
