@@ -4,23 +4,48 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Sale;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class NakamaWebhookController extends Controller
 {
     /**
-     * Procesa los eventos de actualización de estado enviados por Nakama Delivery.
+     * Procesa los eventos de actualización de estado enviados por Nakama Delivery de forma autenticada.
      */
     public function handle(Request $request)
     {
-        $payload = $request->all();
+        // 1. Verificación de Autenticación
+        $configuredSecret = Setting::get('nakama_webhook_secret') 
+            ?: Setting::get('nakama_api_key') 
+            ?: env('NAKAMA_WEBHOOK_SECRET');
 
-        Log::info('NakamaWebhook: Recibido payload:', $payload);
+        $providedToken = $request->header('X-Nakama-Token')
+            ?: $request->header('X-Webhook-Secret')
+            ?: $request->bearerToken()
+            ?: $request->query('token')
+            ?: $request->input('token');
+
+        if (!empty($configuredSecret)) {
+            if (empty($providedToken) || !hash_equals((string)$configuredSecret, (string)$providedToken)) {
+                Log::warning('NakamaWebhook: Intento no autorizado recibido.', [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No autorizado: Credenciales de webhook no válidas.'
+                ], 401);
+            }
+        }
+
+        $payload = $request->all();
+        Log::info('NakamaWebhook: Payload autenticado recibido:', $payload);
 
         $event = $payload['event'] ?? '';
         $nakamaId = $payload['pedido_id'] ?? null;
-        $estado = $payload['estado'] ?? '';
+        $estado = strtolower($payload['estado'] ?? '');
 
         if ($event !== 'order.status_updated' || empty($nakamaId) || empty($estado)) {
             return response()->json([
@@ -29,7 +54,7 @@ class NakamaWebhookController extends Controller
             ], 400);
         }
 
-        // Buscar el pedido en Gourmetica por el ID de Nakama
+        // 2. Buscar el pedido en Gourmetica por el ID de Nakama
         $order = Order::where('nakama_id', $nakamaId)->first();
 
         if (!$order) {
@@ -40,7 +65,7 @@ class NakamaWebhookController extends Controller
             ], 404);
         }
 
-        // Mapear los estados de Nakama a Gourmetica
+        // 3. Mapear los estados de Nakama a Gourmetica con control de transiciones
         $nuevoEstado = null;
         $paymentStatus = $order->payment_status;
 
@@ -51,7 +76,12 @@ class NakamaWebhookController extends Controller
                 break;
             case 'entregado':
                 $nuevoEstado = 'delivered';
-                $paymentStatus = 'paid';
+                // Solo marcar como pagado en la entrega si el método de pago es contraentrega/efectivo.
+                // En pasarelas electrónicas (Izipay, Culqi), el pago debió confirmarse con el procesador.
+                $isContraentrega = in_array(strtolower((string)$order->payment_method), ['cash', 'efectivo', 'contraentrega', 'pago_contraentrega']);
+                if ($isContraentrega) {
+                    $paymentStatus = 'paid';
+                }
                 break;
             case 'cancelado':
             case 'eliminado':
@@ -74,14 +104,13 @@ class NakamaWebhookController extends Controller
                 $order->decrementProductStock();
             }
 
-            // Si se entrega, registrar la venta en Gourmetica (si no se ha registrado antes)
-            if ($nuevoEstado === 'delivered' && $oldStatus !== 'delivered') {
+            // Registrar venta únicamente si el pedido fue entregado Y está pagado legítimamente
+            if ($nuevoEstado === 'delivered' && $order->payment_status === 'paid') {
                 try {
-                    // Evitar duplicados de venta
                     $saleExists = Sale::where('order_id', $order->id)->exists();
                     if (!$saleExists) {
                         Sale::createFromOrder($order);
-                        Log::info("NakamaWebhook: Venta registrada en caja para el Pedido #{$order->id}.");
+                        Log::info("NakamaWebhook: Venta registrada para el Pedido #{$order->id}.");
                     }
                 } catch (\Exception $e) {
                     Log::error("NakamaWebhook Error al registrar venta: " . $e->getMessage());
