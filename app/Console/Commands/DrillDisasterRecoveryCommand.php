@@ -326,19 +326,57 @@ class DrillDisasterRecoveryCommand extends Command
         $user = $connConfig['username'] ?? 'root';
         $pass = $connConfig['password'] ?? '';
 
-        // Conectar al servidor MySQL para crear la base de datos de prueba si no existe
-        $serverPdo = new PDO("mysql:host={$host};port={$port}", $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-        ]);
+        // 1. Intentar conectar directamente si la base de datos ya fue creada previamente (ej. en cPanel)
+        try {
+            $targetPdo = new PDO("mysql:host={$host};port={$port};dbname={$targetDb}", $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]);
 
-        $serverPdo->exec("CREATE DATABASE IF NOT EXISTS `{$targetDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            // Si ya existe, purgar tablas previas para asegurar una restauración limpia y determinista
+            $existingTables = $targetPdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($existingTables)) {
+                $targetPdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+                foreach ($existingTables as $t) {
+                    $targetPdo->exec("DROP TABLE IF EXISTS `{$t}`;");
+                }
+                $targetPdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+            }
 
-        // Conectar específicamente a la base de prueba creada
-        $targetPdo = new PDO("mysql:host={$host};port={$port};dbname={$targetDb}", $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-        ]);
+            return $targetPdo;
+        } catch (\PDOException $e) {
+            // Si la base no existe aún, intentar crearla
+        }
 
-        return $targetPdo;
+        // 2. Intentar crear la base de datos en el servidor MySQL
+        try {
+            $serverPdo = new PDO("mysql:host={$host};port={$port}", $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]);
+
+            $serverPdo->exec("CREATE DATABASE IF NOT EXISTS `{$targetDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+            $targetPdo = new PDO("mysql:host={$host};port={$port};dbname={$targetDb}", $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]);
+
+            return $targetPdo;
+        } catch (\PDOException $e) {
+            // Error 1044 (Access denied para CREATE DATABASE en cPanel/hosting compartido)
+            if ($e->getCode() == 42000 || str_contains($e->getMessage(), '1044')) {
+                throw new \Exception(
+                    "El usuario MySQL '{$user}' no tiene permisos globales para ejecutar 'CREATE DATABASE' directamente.\n" .
+                    "En servidores cPanel/compartidos, esto es una política de seguridad estándar.\n\n" .
+                    "Solución en 3 pasos:\n" .
+                    "1. Ingresa a tu cPanel -> Bases de datos MySQL.\n" .
+                    "2. Crea una nueva base de datos vacía (ejemplo: 'gourmeti_drill').\n" .
+                    "3. En 'Añadir usuario a la base de datos', añade a '{$user}' con TODOS los privilegios.\n" .
+                    "4. Ejecuta el simulacro indicando esa base de prueba autorizada:\n" .
+                    "   php artisan audit:dr-drill --target-db=gourmeti_drill"
+                );
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -429,7 +467,7 @@ class DrillDisasterRecoveryCommand extends Command
     /**
      * Limpia y elimina la base de datos de prueba o archivo sqlite temporal.
      */
-    protected function cleanupTargetDatabase(string $driver, array $connConfig, string $targetDb, PDO $targetPdo): void
+    protected function cleanupTargetDatabase(string $driver, array $connConfig, string $targetDb, ?PDO $targetPdo = null): void
     {
         if ($driver === 'sqlite') {
             unset($targetPdo);
@@ -444,12 +482,25 @@ class DrillDisasterRecoveryCommand extends Command
         $user = $connConfig['username'] ?? 'root';
         $pass = $connConfig['password'] ?? '';
 
-        unset($targetPdo);
-
-        $serverPdo = new PDO("mysql:host={$host};port={$port}", $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-        ]);
-
-        $serverPdo->exec("DROP DATABASE IF EXISTS `{$targetDb}`");
+        // Intentar DROP DATABASE
+        try {
+            $serverPdo = new PDO("mysql:host={$host};port={$port}", $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]);
+            $serverPdo->exec("DROP DATABASE IF EXISTS `{$targetDb}`");
+        } catch (\PDOException $e) {
+            // Si el usuario en cPanel no tiene permisos DROP DATABASE, vaciar las tablas de la base temporal
+            if ($targetPdo) {
+                try {
+                    $tables = $targetPdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+                    $targetPdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+                    foreach ($tables as $t) {
+                        $targetPdo->exec("DROP TABLE IF EXISTS `{$t}`;");
+                    }
+                    $targetPdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+                } catch (\Throwable $ignored) {
+                }
+            }
+        }
     }
 }
