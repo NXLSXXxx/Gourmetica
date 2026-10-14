@@ -107,22 +107,6 @@ Route::middleware(['auth:web'])->group(function () {
 Route::get('/shop/tracking/{order}', [ShopController::class, 'tracking'])->name('shop.tracking');
 
 Route::middleware(['admin'])->prefix('intranet')->group(function () {
-    Route::get('/migrate', function () {
-        try {
-            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-            $output = \Illuminate\Support\Facades\Artisan::output();
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Migraciones ejecutadas exitosamente.',
-                'output' => $output
-            ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    })->name('admin.migrate');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('intranet.dashboard');
     Route::get('/clients', [ClientController::class, 'index'])->name('admin.clients');
     Route::get('/clients/{id}', [ClientController::class, 'show'])->name('admin.clients.show');
@@ -166,6 +150,8 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
     Route::get('/logs', [\App\Http\Controllers\Admin\LogController::class, 'index'])->name('admin.logs.index');
     Route::get('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'index'])->name('admin.backups.index');
     Route::post('/backups', [\App\Http\Controllers\Admin\BackupController::class, 'create'])->name('admin.backups.create');
+    Route::get('/backups/download/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'download'])->name('admin.backups.download');
+    Route::delete('/backups/{filename}', [\App\Http\Controllers\Admin\BackupController::class, 'destroy'])->name('admin.backups.destroy');
     Route::get('/audits', [\App\Http\Controllers\Admin\AuditController::class, 'index'])->name('admin.audits.index');
 });
 
