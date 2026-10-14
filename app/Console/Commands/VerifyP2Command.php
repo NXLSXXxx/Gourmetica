@@ -189,7 +189,19 @@ class VerifyP2Command extends Command
                 $this->error(" [FALLO] Cajero Sede 1 pudo registrar Venta en Sede 2");
             }
 
-            // 1.8 Aislamiento de Admin Sede 2 respecto a Sede 1
+            // 1.8 Fail-Closed: Cajero Sede 1 intenta registrar venta sin sede (sede null) vs interfaz (createAny)
+            $total++;
+            $canOpenForm = $cajeroSede1->can('createAny', Sale::class);
+            $denyNullHqWrite = !$cajeroSede1->can('create', [Sale::class, null]);
+            $denyZeroHqWrite = !$cajeroSede1->can('create', [Sale::class, 0]);
+            if ($canOpenForm && $denyNullHqWrite && $denyZeroHqWrite) {
+                $passed++;
+                $this->line(" [OK] Fail-Closed: Apertura permitida (createAny), pero registro sin sede DENEGADO (create sede null) -> 403 Forbidden");
+            } else {
+                $this->error(" [FALLO] Cajero Sede 1 pudo autorizar escritura sin sede o falló createAny");
+            }
+
+            // 1.9 Aislamiento de Admin Sede 2 respecto a Sede 1
             if ($adminSede) {
                 $total++;
                 if (!$adminSede->can('view', $orderS1)) {
@@ -200,7 +212,7 @@ class VerifyP2Command extends Command
                 }
             }
 
-            // 1.9 Admin General tiene visibilidad de todas las sedes
+            // 1.10 Admin General tiene visibilidad de todas las sedes
             $total++;
             if ($adminGeneral->can('view', $orderS1) && $adminGeneral->can('view', $orderS2)) {
                 $passed++;

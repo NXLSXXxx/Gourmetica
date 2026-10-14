@@ -35,16 +35,29 @@ class SalePolicy
     }
 
     /**
-     * Determina si el usuario puede crear/registrar una venta directa en la sede especificada.
+     * Determina si el usuario puede acceder a la interfaz o formulario de registro de venta directa.
+     */
+    public function createAny(User $user): bool
+    {
+        return $user->isAdmin() || $user->isSedeAdmin() || $user->isCajero();
+    }
+
+    /**
+     * Determina si el usuario puede registrar efectivamente una venta en la sede especificada.
+     * Principio de fail-closed: si headquarterId es nulo o inválido, deniega la escritura.
      */
     public function create(User $user, ?int $headquarterId = null): bool
     {
+        if ($headquarterId === null || $headquarterId <= 0) {
+            return false;
+        }
+
         if ($user->isAdmin()) {
             return true;
         }
 
         if ($user->isSedeAdmin() || $user->isCajero()) {
-            return $headquarterId === null || (int) $user->headquarter_id === (int) $headquarterId;
+            return (int) $user->headquarter_id === (int) $headquarterId;
         }
 
         return false;

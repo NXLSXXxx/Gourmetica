@@ -350,4 +350,33 @@ class AuthorizationTest extends TestCase
         $this->get(route('admin.live_orders.index', ['hq_id' => $this->hq1->id]))->assertStatus(200);
         $this->get(route('admin.live_orders.index', ['hq_id' => $this->hq2->id]))->assertStatus(200);
     }
+
+    /**
+     * Regresión Observación P2.A:
+     * SalePolicy separa la apertura de vista/formulario (createAny) de la autorización
+     * efectiva de escritura (create), denegando explícitamente cualquier creación con headquarter_id nulo (Fail-Closed).
+     */
+    public function test_sale_policy_fails_closed_on_null_headquarter_and_separates_create_any(): void
+    {
+        // 1. Apertura de interfaz (createAny): permitido a Admin General, Admin Sede y Cajero
+        $this->assertTrue($this->adminGeneral->can('createAny', Sale::class));
+        $this->assertTrue($this->adminSede1->can('createAny', Sale::class));
+        $this->assertTrue($this->cajero1->can('createAny', Sale::class));
+        $this->assertFalse($this->ingeniero->can('createAny', Sale::class));
+        $this->assertFalse($this->cliente->can('createAny', Sale::class));
+
+        // 2. Escritura efectiva (create): con headquarter_id = null o <= 0 debe denegar estrictamente (Fail-Closed)
+        // Ni el Cajero, ni el Admin de Sede, ni el Admin General pueden registrar una venta sin sede válida asignada
+        $this->assertFalse($this->cajero1->can('create', [Sale::class, null]));
+        $this->assertFalse($this->cajero1->can('create', [Sale::class, 0]));
+        $this->assertFalse($this->cajero1->can('create', [Sale::class, -1]));
+        $this->assertFalse($this->adminSede1->can('create', [Sale::class, null]));
+        $this->assertFalse($this->adminGeneral->can('create', [Sale::class, null]));
+
+        // 3. Escritura con sede válida asignada: permitido solo para su propia sede o admin general
+        $this->assertTrue($this->cajero1->can('create', [Sale::class, $this->hq1->id]));
+        $this->assertFalse($this->cajero1->can('create', [Sale::class, $this->hq2->id]));
+        $this->assertTrue($this->adminGeneral->can('create', [Sale::class, $this->hq1->id]));
+        $this->assertTrue($this->adminGeneral->can('create', [Sale::class, $this->hq2->id]));
+    }
 }
