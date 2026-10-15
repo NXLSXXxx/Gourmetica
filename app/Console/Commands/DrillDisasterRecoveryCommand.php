@@ -229,7 +229,7 @@ class DrillDisasterRecoveryCommand extends Command
             // 5. AUDITORIA Y VERIFICACION DE INTEGRIDAD PROFUNDA (SOURCE vs TARGET)
             // -----------------------------------------------------------------
             $this->line("<fg=yellow;options=bold>--- PASO 4: AUDITORIA DE INTEGRIDAD PROFUNDA Y CONSISTENCIA DE DATOS ---</>");
-            $comparison = $this->verifyDataConsistency($driver, $sourceDb, $targetDb, $targetPdo);
+            $comparison = $this->verifyDataConsistency($driver, $sourceDb, $targetDb, $targetPdo, !empty($this->option('backup-file')));
 
             $this->table(
                 ['Tabla', 'Filas Origen', 'Filas Rest.', 'Checksum ID', 'Hash Contenido SHA-256', 'Estado'],
@@ -518,7 +518,7 @@ class DrillDisasterRecoveryCommand extends Command
     /**
      * Compara exhaustivamente tablas, conteos y sumas de identificadores entre origen y destino.
      */
-    protected function verifyDataConsistency(string $driver, string $sourceDb, string $targetDb, PDO $targetPdo): array
+    protected function verifyDataConsistency(string $driver, string $sourceDb, string $targetDb, PDO $targetPdo, bool $isHistoricalBackup = false): array
     {
         $sourceTables = [];
         if ($driver === 'mysql' || $driver === 'mariadb') {
@@ -564,14 +564,29 @@ class DrillDisasterRecoveryCommand extends Command
             $sourceContentHash = $this->computeSourceTableHash($table);
             $targetContentHash = $this->computeTargetTableHash($targetPdo, $table);
 
+            $isTransient = in_array(strtolower($table), ['sessions', 'cache', 'cache_locks'], true);
             $matches = ($sourceCount === $targetCount) && ($sourceIdSum === $targetIdSum) && ($sourceContentHash === $targetContentHash);
-            if (!$matches) {
+
+            $isToleratedTransient = false;
+            if (!$matches && $isTransient && $isHistoricalBackup) {
+                // Para tablas volátiles de sesión web en respaldos históricos,
+                // la discrepancia refleja sesiones creadas en el servidor web vivo tras la hora del volcado.
+                $isToleratedTransient = ($targetCount > 0);
+            }
+
+            if (!$matches && !$isToleratedTransient) {
                 $allPassed = false;
             }
 
             $hashDisplay = ($sourceContentHash === $targetContentHash)
                 ? '<fg=green>MATCH (' . substr($sourceContentHash, 0, 8) . ')</>'
-                : '<fg=red>' . substr($sourceContentHash, 0, 6) . ' != ' . substr($targetContentHash, 0, 6) . '</>';
+                : ($isToleratedTransient
+                    ? '<fg=cyan>VOLATIL (' . substr($targetContentHash, 0, 8) . ')</>'
+                    : '<fg=red>' . substr($sourceContentHash, 0, 6) . ' != ' . substr($targetContentHash, 0, 6) . '</>');
+
+            $statusDisplay = $matches
+                ? '<fg=green>PASS</>'
+                : ($isToleratedTransient ? '<fg=cyan>PASS (Sesión web)</>' : '<fg=red>DISCREPANCIA</>');
 
             $rows[] = [
                 $table,
@@ -579,7 +594,7 @@ class DrillDisasterRecoveryCommand extends Command
                 $targetCount,
                 $sourceIdSum,
                 $hashDisplay,
-                $matches ? '<fg=green>PASS</>' : '<fg=red>DISCREPANCIA</>',
+                $statusDisplay,
             ];
         }
 
