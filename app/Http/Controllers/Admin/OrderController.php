@@ -64,9 +64,19 @@ class OrderController extends Controller
 
     public function printTicket($id)
     {
-        $order = Order::with(['user', 'headquarter', 'items.product'])->findOrFail($id);
+        $order = Order::with(['user', 'headquarter', 'items.product', 'sale'])->findOrFail($id);
         Gate::authorize('printTicket', $order);
 
-        return view('admin.orders.ticket', compact('order'));
+        $type = request('type', 'boleta');
+        return view('admin.orders.ticket', compact('order', 'type'));
+    }
+
+    public function printComanda($id)
+    {
+        $order = Order::with(['user', 'headquarter', 'items.product', 'sale'])->findOrFail($id);
+        Gate::authorize('printTicket', $order);
+
+        $type = 'comanda';
+        return view('admin.orders.ticket', compact('order', 'type'));
     }
 }

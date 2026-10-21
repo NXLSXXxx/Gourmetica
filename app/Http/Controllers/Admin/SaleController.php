@@ -371,7 +371,8 @@ class SaleController extends Controller
             'success' => true,
             'message' => 'Compra rápida registrada exitosamente.',
             'sale_id' => $sale->id,
-            'ticket_url' => route('admin.orders.ticket', $order->id),
+            'ticket_url' => route('admin.orders.ticket', ['id' => $order->id, 'type' => 'boleta']),
+            'comanda_url' => route('admin.orders.comanda', $order->id),
             'live_orders' => $this->getLiveOrdersData($request->headquarter_id),
         ]);
     }
@@ -473,6 +474,12 @@ class SaleController extends Controller
                 'is_delivery' => $order->delivery_zone_id || $order->delivery_price > 0,
                 'created_at' => $order->created_at->format('H:i'),
                 'time_ago' => $order->created_at->diffForHumans(),
+                'phone' => $order->phone ?: ($order->user->phone ?? ''),
+                'phone_digits' => preg_replace('/[^0-9]/', '', $order->phone ?: ($order->user->phone ?? '')),
+                'ticket_url' => route('admin.orders.ticket', ['id' => $order->id, 'type' => 'boleta']),
+                'comanda_url' => route('admin.orders.comanda', $order->id),
+                'comanda_text' => $order->getFormattedComandaText(),
+                'invoice_text' => $order->getFormattedInvoiceText(),
                 'items' => $order->items->map(function($item) {
                     return [
                         'product_name' => $item->product->name ?? 'Producto',

@@ -53,7 +53,10 @@
                                 <a href="{{ route('admin.orders.show', $order->id) }}" class="text-brand-secondary hover:text-white transition-colors text-sm font-medium" title="Ver detalles">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                 </a>
-                                <a href="{{ route('admin.orders.ticket', $order->id) }}" target="_blank" class="text-brand-secondary hover:text-white transition-colors text-sm font-medium" title="Imprimir Ticket">
+                                <a href="{{ route('admin.orders.comanda', $order->id) }}" target="_blank" class="text-blue-400 hover:text-white transition-colors text-sm font-medium" title="Imprimir Comanda">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                                </a>
+                                <a href="{{ route('admin.orders.ticket', ['id' => $order->id, 'type' => 'boleta']) }}" target="_blank" class="text-brand-secondary hover:text-white transition-colors text-sm font-medium" title="Imprimir Boleta">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                 </a>
                             </td>

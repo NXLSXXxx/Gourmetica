@@ -132,18 +132,54 @@
 </div>
 
 <!-- Modal Update Status (hidden by default) -->
-<div id="statusModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden backdrop-blur-sm">
-    <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-2xl w-full max-w-sm p-6">
-        <h3 class="text-xl font-bold text-white mb-4">Actualizar Estado</h3>
-        <p class="text-slate-400 text-sm mb-6" id="modalOrderName"></p>
+<div id="statusModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-4">
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-start mb-2">
+            <h3 class="text-xl font-bold text-white">Detalle y Comprobante</h3>
+            <button onclick="closeStatusModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+        </div>
+        <p class="text-slate-400 text-sm mb-4" id="modalOrderName"></p>
         
         <input type="hidden" id="modalOrderId">
-        
+
+        <!-- Comanda & Boleta Quick Actions -->
+        <div class="mb-5 bg-slate-900/70 p-4 rounded-xl border border-slate-700/80 space-y-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
+                <span class="w-2 h-2 rounded-full bg-brand-secondary mr-2"></span>
+                Impresión y WhatsApp Gourmetica
+            </span>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="printModalComanda()" class="py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow">
+                    📋 Imprimir Comanda
+                </button>
+                <button type="button" onclick="printModalTicket()" class="py-2.5 px-3 rounded-lg bg-brand-secondary hover:bg-brand-secondary/90 text-brand-dark font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow">
+                    🧾 Imprimir Boleta
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="copyModalComanda(this)" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1 border border-slate-700 transition-colors">
+                    📋 Copiar Comanda
+                </button>
+                <button type="button" onclick="copyModalInvoice(this)" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1 border border-slate-700 transition-colors">
+                    🧾 Copiar Boleta
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+                <button type="button" onclick="sendModalComandaWa()" class="py-1.5 px-2 rounded-lg bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-white text-xs font-bold flex items-center justify-center gap-1 transition-colors">
+                    💬 WhatsApp Cocina
+                </button>
+                <button type="button" onclick="sendModalInvoiceWa()" class="py-1.5 px-2 rounded-lg bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-white text-xs font-bold flex items-center justify-center gap-1 transition-colors">
+                    💬 WhatsApp Cliente
+                </button>
+            </div>
+        </div>
+
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">Transición de Estado</span>
         <div class="space-y-2" id="statusButtons">
             <!-- Buttons injected by JS -->
         </div>
         
-        <button onclick="closeStatusModal()" class="mt-6 w-full py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+        <button onclick="closeStatusModal()" class="mt-4 w-full py-2.5 text-slate-400 hover:text-white transition-colors text-sm font-semibold border border-slate-700 rounded-lg">Cerrar</button>
     </div>
 </div>
 @endsection
@@ -223,6 +259,9 @@
         'delivered': []
     };
 
+    let currentLiveOrdersMap = {};
+    let currentActiveOrderId = null;
+
     function fetchOrders() {
         fetch(`${API_URL}?hq_id=${HQ_ID}`, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -233,11 +272,15 @@
     }
 
     function renderKanban(data) {
+        currentLiveOrdersMap = {};
         const board = document.getElementById('kanbanBoard');
         board.innerHTML = '';
 
         COLUMNS.forEach(col => {
             const orders = data[col.id] || [];
+            orders.forEach(o => {
+                currentLiveOrdersMap[o.order_id] = o;
+            });
             
             const colEl = document.createElement('div');
             colEl.className = 'flex-1 min-w-[300px] flex flex-col bg-slate-900/50 rounded-xl border border-slate-700/50';
@@ -271,18 +314,33 @@
                     </div>
                     <span class="text-xs text-slate-500 bg-slate-900 px-2 py-1 rounded">${order.time_ago}</span>
                 </div>
-                <div class="space-y-1 mb-4">
+                <div class="space-y-1 mb-3">
                     ${itemsHtml}
                 </div>
-                <div class="flex justify-between items-center pt-3 border-t border-slate-700">
+                <div class="flex justify-between items-center pt-2.5 border-t border-slate-700">
                     <span class="text-xs ${order.payment_status === 'paid' ? 'text-emerald-400' : 'text-orange-400'}">${order.payment_status === 'paid' ? 'Pagado' : 'Por pagar'}</span>
                     <span class="font-bold text-brand-primary">S/ ${order.total.toFixed(2)}</span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-slate-700/60" onclick="event.stopPropagation()">
+                    <button onclick="window.open('${order.comanda_url}', '_blank')" title="Imprimir Comanda Cocina" class="flex-1 py-1 px-1.5 rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white text-[10px] font-bold transition-colors text-center">
+                        📋 Comanda
+                    </button>
+                    <button onclick="window.open('${order.ticket_url}', '_blank')" title="Imprimir Boleta Cliente" class="flex-1 py-1 px-1.5 rounded bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black text-[10px] font-bold transition-colors text-center">
+                        🧾 Boleta
+                    </button>
+                    <button onclick="quickCopyLiveOrder(${order.order_id}, 'comanda', this)" title="Copiar Formato Comanda para WhatsApp" class="py-1 px-2 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-[10px] font-bold transition-colors">
+                        📋
+                    </button>
+                    <button onclick="quickSendLiveOrderWa(${order.order_id})" title="Enviar WhatsApp Cliente" class="py-1 px-2 rounded bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-white text-[10px] font-bold transition-colors">
+                        💬
+                    </button>
                 </div>
             </div>
         `;
     }
 
     function openStatusModal(orderId, customerName, currentStatus, isDelivery = false) {
+        currentActiveOrderId = orderId;
         document.getElementById('modalOrderId').value = orderId;
         document.getElementById('modalOrderName').innerHTML = `
             Pedido de ${customerName} 
@@ -308,6 +366,73 @@
         }
 
         document.getElementById('statusModal').classList.remove('hidden');
+    }
+
+    function printModalComanda() {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        window.open(currentLiveOrdersMap[currentActiveOrderId].comanda_url, '_blank');
+    }
+
+    function printModalTicket() {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        window.open(currentLiveOrdersMap[currentActiveOrderId].ticket_url, '_blank');
+    }
+
+    function copyModalComanda(btn) {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        copyTextToClipboard(currentLiveOrdersMap[currentActiveOrderId].comanda_text, btn, '¡Copiado!');
+    }
+
+    function copyModalInvoice(btn) {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        copyTextToClipboard(currentLiveOrdersMap[currentActiveOrderId].invoice_text, btn, '¡Copiado!');
+    }
+
+    function sendModalComandaWa() {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        const text = encodeURIComponent(currentLiveOrdersMap[currentActiveOrderId].comanda_text);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+    }
+
+    function sendModalInvoiceWa() {
+        if (!currentActiveOrderId || !currentLiveOrdersMap[currentActiveOrderId]) return;
+        const order = currentLiveOrdersMap[currentActiveOrderId];
+        const text = encodeURIComponent(order.invoice_text);
+        const target = order.phone_digits ? `https://wa.me/${order.phone_digits}?text=${text}` : `https://wa.me/?text=${text}`;
+        window.open(target, '_blank');
+    }
+
+    function quickCopyLiveOrder(orderId, type, btn) {
+        const order = currentLiveOrdersMap[orderId];
+        if (!order) return;
+        const text = type === 'comanda' ? order.comanda_text : order.invoice_text;
+        copyTextToClipboard(text, btn, '✓');
+    }
+
+    function quickSendLiveOrderWa(orderId) {
+        const order = currentLiveOrdersMap[orderId];
+        if (!order) return;
+        const text = encodeURIComponent(order.invoice_text);
+        const target = order.phone_digits ? `https://wa.me/${order.phone_digits}?text=${text}` : `https://wa.me/?text=${text}`;
+        window.open(target, '_blank');
+    }
+
+    function copyTextToClipboard(text, btn, feedback) {
+        navigator.clipboard.writeText(text).then(() => {
+            if (btn) {
+                const orig = btn.innerText;
+                btn.innerText = feedback;
+                setTimeout(() => btn.innerText = orig, 2000);
+            }
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('¡Copiado al portapapeles!');
+        });
     }
 
     function closeStatusModal() {

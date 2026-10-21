@@ -28,12 +28,18 @@
             </h1>
             <p class="text-slate-400 mt-2">Registrado el {{ $order->created_at->format('d/m/Y H:i A') }}</p>
         </div>
-        <div class="flex items-center gap-3">
-            <a href="{{ route('admin.orders.ticket', $order->id) }}" target="_blank" class="px-6 py-3.5 rounded-xl bg-brand-secondary text-brand-dark font-bold text-sm flex items-center hover:scale-105 transition-transform shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        <div class="flex items-center gap-3 flex-wrap">
+            <a href="{{ route('admin.orders.ticket', ['id' => $order->id, 'type' => 'boleta']) }}" target="_blank" class="px-5 py-3 rounded-xl bg-brand-secondary text-brand-dark font-bold text-sm flex items-center hover:scale-105 transition-transform shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                IMPRIMIR TICKET
+                IMPRIMIR BOLETA
+            </a>
+            <a href="{{ route('admin.orders.comanda', $order->id) }}" target="_blank" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center hover:scale-105 transition-transform shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                IMPRIMIR COMANDA
             </a>
         </div>
     </header>
@@ -100,6 +106,81 @@
                 </p>
             </div>
             @endif
+
+            <!-- Comanda & Boleta/Factura Gourmetica Official Templates Card -->
+            <div class="bg-brand-primary border border-slate-700 rounded-2xl shadow-xl overflow-hidden" x-data="{ docTab: 'comanda' }">
+                <div class="px-6 py-5 bg-slate-800/40 border-b border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-serif font-bold text-white flex items-center">
+                            <span class="text-brand-secondary mr-2">📋</span>
+                            Formatos Comanda y Boleta / Factura
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">Plantillas oficiales para producción en cocina, despacho y envío directo por WhatsApp</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700">
+                        <button type="button" @click="docTab = 'comanda'" :class="docTab === 'comanda' ? 'bg-brand-secondary text-brand-dark font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition-all">
+                            📋 Comanda
+                        </button>
+                        <button type="button" @click="docTab = 'boleta'" :class="docTab === 'boleta' ? 'bg-brand-secondary text-brand-dark font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition-all">
+                            🧾 Boleta / Factura
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-6">
+                    <!-- Tab 1: Comanda -->
+                    <div x-show="docTab === 'comanda'" class="space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                                Formato Comanda (Cocina & Despacho)
+                            </span>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button type="button" onclick="copyDocumentText('comanda-text', 'comanda-btn-text')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center shadow">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                    <span id="comanda-btn-text">Copiar Comanda</span>
+                                </button>
+                                <a href="https://wa.me/?text={{ urlencode($order->getFormattedComandaText()) }}" target="_blank" class="px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-bold transition-colors flex items-center shadow">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                                    Enviar a WhatsApp
+                                </a>
+                                <a href="{{ route('admin.orders.comanda', $order->id) }}" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-colors flex items-center">
+                                    🖨️ Ticket Térmico
+                                </a>
+                            </div>
+                        </div>
+                        <pre id="comanda-text" class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-4 text-xs font-mono text-slate-200 whitespace-pre-wrap leading-relaxed select-all">{{ $order->getFormattedComandaText() }}</pre>
+                    </div>
+
+                    <!-- Tab 2: Boleta / Factura -->
+                    <div x-show="docTab === 'boleta'" class="space-y-4" style="display: none;">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 mr-2"></span>
+                                Formato Boleta o Factura (Con Logo Gourmetica)
+                            </span>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button type="button" onclick="copyDocumentText('boleta-text', 'boleta-btn-text')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center shadow">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                    <span id="boleta-btn-text">Copiar Boleta</span>
+                                </button>
+                                @php
+                                    $targetWa = preg_replace('/[^0-9]/', '', $order->phone ?: ($order->user->phone ?? ''));
+                                    $waUrl = $targetWa ? "https://wa.me/{$targetWa}?text=" . urlencode($order->getFormattedInvoiceText()) : "https://wa.me/?text=" . urlencode($order->getFormattedInvoiceText());
+                                @endphp
+                                <a href="{{ $waUrl }}" target="_blank" class="px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-bold transition-colors flex items-center shadow">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                                    Enviar al Cliente
+                                </a>
+                                <a href="{{ route('admin.orders.ticket', ['id' => $order->id, 'type' => 'boleta']) }}" target="_blank" class="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-black border border-amber-500/30 text-xs font-bold transition-colors flex items-center">
+                                    🧾 Ticket Boleta
+                                </a>
+                            </div>
+                        </div>
+                        <pre id="boleta-text" class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-4 text-xs font-mono text-slate-200 whitespace-pre-wrap leading-relaxed select-all">{{ $order->getFormattedInvoiceText() }}</pre>
+                    </div>
+                </div>
+            </div>
 
         </div>
 
@@ -215,4 +296,30 @@
 
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+    function copyDocumentText(elemId, btnTextId) {
+        const text = document.getElementById(elemId).innerText;
+        navigator.clipboard.writeText(text).then(function() {
+            const btnText = document.getElementById(btnTextId);
+            if (btnText) {
+                const originalText = btnText.innerText;
+                btnText.innerText = '¡Copiado! ✓';
+                setTimeout(() => {
+                    btnText.innerText = originalText;
+                }, 2500);
+            }
+        }).catch(function(err) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            alert("¡Texto copiado al portapapeles!");
+        });
+    }
+</script>
 @endsection

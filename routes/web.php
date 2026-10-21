@@ -124,6 +124,7 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
         Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
         Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.update_status');
         Route::get('/orders/{id}/ticket', [AdminOrderController::class, 'printTicket'])->name('admin.orders.ticket');
+        Route::get('/orders/{id}/comanda', [AdminOrderController::class, 'printComanda'])->name('admin.orders.comanda');
         Route::get('/sales', [\App\Http\Controllers\Admin\SaleController::class, 'index'])->name('admin.sales.index');
         Route::post('/sales/direct', [\App\Http\Controllers\Admin\SaleController::class, 'storeDirect'])->name('admin.sales.store_direct');
         Route::post('/sales/{id}/declare', [\App\Http\Controllers\Admin\SaleController::class, 'declareToSunat'])->name('admin.sales.declare');
