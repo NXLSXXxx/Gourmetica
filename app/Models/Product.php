@@ -29,18 +29,11 @@ class Product extends Model
         });
     }
 
-    protected static ?bool $hasIsAvailableColumn = null;
+    protected static ?bool $hasIsAvailableColumn = true;
 
     public static function hasIsAvailableColumn(): bool
     {
-        if (static::$hasIsAvailableColumn === null) {
-            try {
-                static::$hasIsAvailableColumn = \Illuminate\Support\Facades\Schema::hasColumn('headquarter_product', 'is_available');
-            } catch (\Throwable $e) {
-                static::$hasIsAvailableColumn = false;
-            }
-        }
-        return static::$hasIsAvailableColumn;
+        return true;
     }
 
     public function category()
