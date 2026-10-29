@@ -12,7 +12,13 @@ class Supply extends Model
     protected $fillable = [
         'name',
         'unit',
+        'supply_category_id',
     ];
+
+    public function category()
+    {
+        return $this->belongsTo(SupplyCategory::class, 'supply_category_id');
+    }
 
     public function headquarters()
     {

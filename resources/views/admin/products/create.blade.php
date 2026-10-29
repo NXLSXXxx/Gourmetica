@@ -91,7 +91,7 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-4">
                             <div>
-                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Stock</label>
+                                <label class="block text-[10px] uppercase font-bold text-brand-secondary mb-1">Stock Inicial</label>
                                 <input type="number" name="headquarters[{{ $hq->id }}][stock]" value="0" min="0" class="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none">
                             </div>
                             <div>

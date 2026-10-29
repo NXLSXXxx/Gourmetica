@@ -96,7 +96,7 @@ class SaleController extends Controller
                 'payment_status' => 'paid',
                 'invoice_type' => $documentType === '01' ? 'factura' : 'boleta',
                 'invoice_document' => $invoiceDoc,
-                'stock_decremented' => true,
+                'stock_decremented' => false,
             ]);
 
             foreach ($request->products as $pInput) {
@@ -110,6 +110,9 @@ class SaleController extends Controller
                     'price' => $productPrice,
                 ]);
             }
+
+            // Descontar inmediatamente el stock de producto terminado en la sede seleccionada
+            $order->decrementProductStock();
 
             return Sale::create([
                 'user_id' => $request->user_id,

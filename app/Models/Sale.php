@@ -46,6 +46,11 @@ class Sale extends Model
                 return $existing;
             }
 
+            // Descontar stock de producto terminado en sede si aún no ha sido descontado
+            if (!$order->stock_decremented) {
+                $order->decrementProductStock();
+            }
+
             $isFactura = ($order->invoice_type ?? '') === 'factura';
             $documentType = $isFactura ? '01' : '03'; // 01: Factura, 03: Boleta
             $series = $isFactura ? 'F001' : 'B001';

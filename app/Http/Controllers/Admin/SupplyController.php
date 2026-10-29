@@ -4,20 +4,35 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Supply;
+use App\Models\SupplyCategory;
 use App\Models\Headquarter;
 use Illuminate\Http\Request;
 
 class SupplyController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = auth('admin')->user();
         if (!$user->isAdmin() && !$user->isIngeniero() && !$user->isSedeAdmin()) {
             abort(403, 'No tienes permiso para gestionar insumos.');
         }
 
-        $supplies = Supply::latest()->get();
-        return view('admin.supplies.index', compact('supplies'));
+        $query = Supply::with(['category', 'headquarters'])->latest();
+
+        if ($request->filled('category_id')) {
+            $query->where('supply_category_id', $request->category_id);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $supplies = $query->paginate(20)->withQueryString();
+        $categories = SupplyCategory::orderBy('name')->get();
+        $headquarters = Headquarter::where('is_active', true)->get();
+
+        return view('admin.supplies.index', compact('supplies', 'categories', 'headquarters'));
     }
 
     public function create()
@@ -27,7 +42,10 @@ class SupplyController extends Controller
             abort(403, 'No tienes permiso para crear insumos.');
         }
 
-        return view('admin.supplies.create');
+        $categories = SupplyCategory::orderBy('name')->get();
+        $headquarters = Headquarter::where('is_active', true)->get();
+
+        return view('admin.supplies.create', compact('categories', 'headquarters'));
     }
 
     public function store(Request $request)
@@ -40,11 +58,34 @@ class SupplyController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'unit' => 'required|string|in:g,ml,und',
+            'supply_category_id' => 'nullable|exists:supply_categories,id',
+            'new_category' => 'nullable|string|max:100',
+            'headquarters' => 'nullable|array',
+            'headquarters.*.stock' => 'nullable|numeric|min:0',
         ]);
 
-        Supply::create($validated);
+        if (!empty($request->new_category)) {
+            $newCat = SupplyCategory::firstOrCreate(
+                ['name' => trim($request->new_category)]
+            );
+            $validated['supply_category_id'] = $newCat->id;
+        }
 
-        return redirect()->route('admin.supplies.index')->with('success', 'Insumo creado correctamente.');
+        $supply = Supply::create([
+            'name' => $validated['name'],
+            'unit' => $validated['unit'],
+            'supply_category_id' => $validated['supply_category_id'] ?? null,
+        ]);
+
+        // Guardar stock inicial por sede si fue ingresado
+        if (!empty($request->headquarters) && is_array($request->headquarters)) {
+            foreach ($request->headquarters as $hqId => $data) {
+                $stock = isset($data['stock']) && $data['stock'] !== '' ? (float)$data['stock'] : 0.0;
+                $supply->headquarters()->attach($hqId, ['stock' => $stock]);
+            }
+        }
+
+        return redirect()->route('admin.supplies.index')->with('success', 'Insumo creado correctamente con su stock inicial asignado.');
     }
 
     public function edit(Supply $supply)
@@ -54,7 +95,15 @@ class SupplyController extends Controller
             abort(403, 'No tienes permiso para editar insumos.');
         }
 
-        return view('admin.supplies.edit', compact('supply'));
+        $categories = SupplyCategory::orderBy('name')->get();
+        $headquarters = Headquarter::where('is_active', true)->get();
+        $stocks = [];
+        foreach ($headquarters as $hq) {
+            $pivot = $supply->headquarters()->where('headquarter_id', $hq->id)->first();
+            $stocks[$hq->id] = $pivot ? (float)$pivot->pivot->stock : 0.0;
+        }
+
+        return view('admin.supplies.edit', compact('supply', 'categories', 'headquarters', 'stocks'));
     }
 
     public function update(Request $request, Supply $supply)
@@ -67,11 +116,40 @@ class SupplyController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'unit' => 'required|string|in:g,ml,und',
+            'supply_category_id' => 'nullable|exists:supply_categories,id',
+            'new_category' => 'nullable|string|max:100',
+            'headquarters' => 'nullable|array',
+            'headquarters.*.stock' => 'nullable|numeric|min:0',
         ]);
 
-        $supply->update($validated);
+        if (!empty($request->new_category)) {
+            $newCat = SupplyCategory::firstOrCreate(
+                ['name' => trim($request->new_category)]
+            );
+            $validated['supply_category_id'] = $newCat->id;
+        }
 
-        return redirect()->route('admin.supplies.index')->with('success', 'Insumo actualizado correctamente.');
+        $supply->update([
+            'name' => $validated['name'],
+            'unit' => $validated['unit'],
+            'supply_category_id' => $validated['supply_category_id'] ?? null,
+        ]);
+
+        if ($request->has('headquarters') && is_array($request->headquarters)) {
+            foreach ($request->headquarters as $hqId => $data) {
+                if (isset($data['stock']) && $data['stock'] !== '') {
+                    $stock = (float)$data['stock'];
+                    $pivot = $supply->headquarters()->where('headquarter_id', $hqId)->first();
+                    if ($pivot) {
+                        $supply->headquarters()->updateExistingPivot($hqId, ['stock' => $stock]);
+                    } else {
+                        $supply->headquarters()->attach($hqId, ['stock' => $stock]);
+                    }
+                }
+            }
+        }
+
+        return redirect()->route('admin.supplies.index')->with('success', 'Insumo y stock actualizados correctamente.');
     }
 
     public function destroy(Supply $supply)
