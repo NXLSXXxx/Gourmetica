@@ -24,7 +24,18 @@ class Product extends Model
         parent::boot();
         static::creating(function ($product) {
             if (!$product->slug) {
-                $product->slug = \Illuminate\Support\Str::slug($product->name);
+                $baseSlug = \Illuminate\Support\Str::slug($product->name) ?: 'producto';
+                $slug = $baseSlug;
+                $suffix = 2;
+
+                // Product names are allowed to repeat; the URL identifier is not.
+                // Avoid a database unique-key exception when registering a second
+                // product with the same name.
+                while (static::where('slug', $slug)->exists()) {
+                    $slug = $baseSlug . '-' . $suffix++;
+                }
+
+                $product->slug = $slug;
             }
         });
     }
@@ -33,7 +44,20 @@ class Product extends Model
 
     public static function hasIsAvailableColumn(): bool
     {
-        return true;
+        if (static::$hasIsAvailableColumn === null) {
+            try {
+                static::$hasIsAvailableColumn = \Illuminate\Support\Facades\Schema::hasColumn(
+                    'headquarter_product',
+                    'is_available'
+                );
+            } catch (\Throwable $e) {
+                // Keep the catalog usable while the database is unavailable or
+                // before the optional compatibility migration has run.
+                static::$hasIsAvailableColumn = false;
+            }
+        }
+
+        return static::$hasIsAvailableColumn;
     }
 
     public function category()

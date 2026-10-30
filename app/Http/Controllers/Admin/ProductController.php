@@ -81,7 +81,7 @@ class ProductController extends Controller
             'name' => $validated['name'],
             'category_id' => $validated['category_id'],
             'base_price' => $validated['base_price'],
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'image' => $imagePath,
             'is_active' => true,
         ]);
@@ -181,7 +181,7 @@ class ProductController extends Controller
             'name' => $validated['name'],
             'category_id' => $validated['category_id'],
             'base_price' => $validated['base_price'],
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'image' => $validated['image'] ?? $product->image,
             'is_active' => $request->has('is_active'),
         ]);
