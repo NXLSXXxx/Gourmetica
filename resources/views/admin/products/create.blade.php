@@ -16,6 +16,17 @@
             <p class="text-slate-400 mt-2">Ingresa los detalles del producto y asigna el stock inicial por sede.</p>
         </header>
 
+        @if ($errors->any())
+            <div class="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200" role="alert">
+                <p class="font-bold mb-2">No se pudo guardar el producto:</p>
+                <ul class="list-disc list-inside space-y-1">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form action="{{ route('admin.products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-8">
             @csrf
             
@@ -55,7 +66,7 @@
                                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                                     </svg>
                                     <p class="mb-2 text-sm text-slate-400"><span class="font-semibold">Click para subir</span> o arrastra</p>
-                                    <p class="text-xs text-slate-500">PNG, JPG o WEBP (Máx. 2MB)</p>
+                                    <p class="text-xs text-slate-500">PNG, JPG o WEBP (Máx. 10MB)</p>
                                 </div>
                                 <input type="file" name="image" class="hidden" accept="image/*" />
                             </label>

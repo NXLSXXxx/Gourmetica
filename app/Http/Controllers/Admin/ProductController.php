@@ -57,7 +57,7 @@ class ProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'base_price' => 'required|numeric',
             'description' => 'nullable|string',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|image|max:10240',
             'headquarters' => 'nullable|array',
             'headquarters.*.is_available' => 'nullable',
             'headquarters.*.stock' => 'nullable|integer|min:0',
@@ -154,7 +154,7 @@ class ProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'base_price' => 'required|numeric',
             'description' => 'nullable|string',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|image|max:10240',
             'is_active' => 'boolean',
             'headquarters' => 'nullable|array',
             'headquarters.*.is_available' => 'nullable',
@@ -170,11 +170,16 @@ class ProductController extends Controller
             'recipe.*.quantity' => 'required_with:recipe|numeric|min:0.0001',
         ]);
 
+        $oldImagePath = $product->image;
+        $newImagePath = null;
         if ($request->hasFile('image')) {
-            if ($product->image) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($product->image);
+            $newImagePath = $request->file('image')->store('products', 'public');
+
+            if (!$newImagePath) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['image' => 'No se pudo guardar la imagen. Verifica los permisos de almacenamiento e inténtalo nuevamente.']);
             }
-            $validated['image'] = $request->file('image')->store('products', 'public');
         }
 
         $product->update([
@@ -182,9 +187,13 @@ class ProductController extends Controller
             'category_id' => $validated['category_id'],
             'base_price' => $validated['base_price'],
             'description' => $validated['description'] ?? null,
-            'image' => $validated['image'] ?? $product->image,
+            'image' => $newImagePath ?? $product->image,
             'is_active' => $request->has('is_active'),
         ]);
+
+        if ($newImagePath && $oldImagePath) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($oldImagePath);
+        }
 
         if ($request->has('headquarters') && is_array($request->headquarters)) {
             $syncData = [];

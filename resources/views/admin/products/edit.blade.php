@@ -16,6 +16,17 @@
             <p class="text-slate-400 mt-2">Actualiza los detalles de <strong>{{ $product->name }}</strong>.</p>
         </header>
 
+        @if ($errors->any())
+            <div class="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200" role="alert">
+                <p class="font-bold mb-2">No se pudo guardar el producto:</p>
+                <ul class="list-disc list-inside space-y-1">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form action="{{ route('admin.products.update', $product) }}" method="POST" enctype="multipart/form-data" class="space-y-8">
             @csrf
             @method('PUT')
@@ -73,9 +84,10 @@
                                     </svg>
                                     <p class="text-xs text-slate-400">Click para reemplazar imagen</p>
                                 </div>
-                                <input type="file" name="image" class="hidden" accept="image/*" />
+                                <input type="file" name="image" id="product-image" class="hidden" accept="image/*" />
                             </label>
                         </div>
+                        <p id="product-image-help" class="mt-2 text-xs text-slate-500">Formatos permitidos: JPG, PNG, WEBP. Tamaño máximo: 10 MB.</p>
                     </div>
                     
                     <div class="col-span-2">
@@ -217,6 +229,25 @@
 
 @section('scripts')
 <script>
+    const productImageInput = document.getElementById('product-image');
+    const productImageHelp = document.getElementById('product-image-help');
+
+    productImageInput?.addEventListener('change', function () {
+        const file = this.files?.[0];
+        if (!file) return;
+
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            productImageHelp.textContent = 'La imagen supera el límite de 10 MB. Selecciona un archivo más pequeño.';
+            productImageHelp.className = 'mt-2 text-xs text-red-400';
+            this.value = '';
+            return;
+        }
+
+        productImageHelp.textContent = `Imagen seleccionada: ${file.name}`;
+        productImageHelp.className = 'mt-2 text-xs text-emerald-400';
+    });
+
     let optionIndex = {{ $product->options->count() }};
 
     function addOptionBlock() {
