@@ -23,9 +23,14 @@ class ShopController extends Controller
             $query->availableInHeadquarter($selectedHqId);
         }
 
-        if ($request->has('category')) {
-            $query->whereHas('category', function($q) use ($request) {
-                $q->where('slug', $request->category);
+        if ($request->filled('category')) {
+            $catParam = $request->category;
+            $query->whereHas('category', function($q) use ($catParam) {
+                if (is_numeric($catParam)) {
+                    $q->where('id', $catParam);
+                } else {
+                    $q->where('slug', $catParam);
+                }
             });
         }
 
@@ -37,8 +42,51 @@ class ShopController extends Controller
             });
         }
 
-        $products = $query->paginate(12);
-        $categories = \App\Models\Category::all();
+        if ($request->filled('min_price') && is_numeric($request->min_price)) {
+            $query->where('base_price', '>=', (float) $request->min_price);
+        }
+
+        if ($request->filled('max_price') && is_numeric($request->max_price)) {
+            $query->where('base_price', '<=', (float) $request->max_price);
+        }
+
+        if ($request->boolean('in_stock') && $selectedHqId) {
+            $query->whereHas('headquarters', function($q) use ($selectedHqId) {
+                $q->where('headquarters.id', $selectedHqId)
+                  ->where('headquarter_product.stock', '>', 0);
+            });
+        }
+
+        $sort = $request->input('sort', 'category');
+        switch ($sort) {
+            case 'price_asc':
+                $query->orderBy('base_price', 'asc');
+                break;
+            case 'price_desc':
+                $query->orderBy('base_price', 'desc');
+                break;
+            case 'name_asc':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'latest':
+                $query->latest();
+                break;
+            case 'category':
+            default:
+                $query->orderBy('category_id', 'asc')->orderBy('name', 'asc');
+                break;
+        }
+
+        $products = $query->paginate(24)->withQueryString();
+        $categories = \App\Models\Category::withCount(['products' => function ($q) use ($selectedHqId) {
+            $q->where('is_active', true);
+            if ($selectedHqId) {
+                $q->availableInHeadquarter($selectedHqId);
+            }
+        }])->get();
 
         return view('shop.index', compact('products', 'categories', 'selectedHqId'));
     }

@@ -11,6 +11,7 @@ class ProductController extends Controller
     {
         $user = auth('admin')->user();
         $headquarters = \App\Models\Headquarter::where('is_active', true)->get();
+        $categories = \App\Models\Category::withCount('products')->orderBy('name')->get();
 
         $selectedHqId = $request->input('hq_id');
         if (($user && ($user->isSedeAdmin() || $user->isCajero())) && !$selectedHqId) {
@@ -19,10 +20,19 @@ class ProductController extends Controller
 
         $query = \App\Models\Product::with(['category', 'headquarters']);
 
-        if ($request->filled('category')) {
-            $query->where('category_id', $request->category);
+        // Filtro por categoría (acepta category_id o category por ID o slug)
+        $categoryFilter = $request->input('category_id', $request->input('category'));
+        if ($categoryFilter !== null && $categoryFilter !== '') {
+            if (is_numeric($categoryFilter)) {
+                $query->where('category_id', $categoryFilter);
+            } else {
+                $query->whereHas('category', function ($q) use ($categoryFilter) {
+                    $q->where('slug', $categoryFilter);
+                });
+            }
         }
 
+        // Búsqueda por texto
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -31,15 +41,80 @@ class ProductController extends Controller
             });
         }
 
-        if ($selectedHqId && $request->has('only_available')) {
+        // Filtro por estado global (activo / inactivo)
+        if ($request->filled('status')) {
+            if ($request->status === 'active') {
+                $query->where('is_active', true);
+            } elseif ($request->status === 'inactive') {
+                $query->where('is_active', false);
+            }
+        }
+
+        // Filtro por rango de precio
+        if ($request->filled('min_price') && is_numeric($request->min_price)) {
+            $query->where('base_price', '>=', (float) $request->min_price);
+        }
+        if ($request->filled('max_price') && is_numeric($request->max_price)) {
+            $query->where('base_price', '<=', (float) $request->max_price);
+        }
+
+        // Filtro por disponibilidad en sede
+        if ($selectedHqId && $request->boolean('only_available')) {
             $query->whereHas('headquarters', function($q) use ($selectedHqId) {
                 $q->where('headquarters.id', $selectedHqId)
                   ->where('headquarter_product.is_available', true);
             });
         }
 
-        $products = $query->paginate(15);
-        return view('admin.products.index', compact('products', 'headquarters', 'selectedHqId'));
+        // Filtro por stock
+        if ($request->filled('stock_status')) {
+            if ($request->stock_status === 'in_stock') {
+                $query->whereHas('headquarters', function ($q) use ($selectedHqId) {
+                    if ($selectedHqId) {
+                        $q->where('headquarters.id', $selectedHqId);
+                    }
+                    $q->where('headquarter_product.stock', '>', 0);
+                });
+            } elseif ($request->stock_status === 'out_of_stock') {
+                if ($selectedHqId) {
+                    $query->whereDoesntHave('headquarters', function ($q) use ($selectedHqId) {
+                        $q->where('headquarters.id', $selectedHqId)
+                          ->where('headquarter_product.stock', '>', 0);
+                    });
+                } else {
+                    $query->whereDoesntHave('headquarters', function ($q) {
+                        $q->where('headquarter_product.stock', '>', 0);
+                    });
+                }
+            }
+        }
+
+        // Ordenamiento (por defecto organizado por categoría y nombre)
+        $sort = $request->input('sort', 'category');
+        switch ($sort) {
+            case 'price_asc':
+                $query->orderBy('base_price', 'asc');
+                break;
+            case 'price_desc':
+                $query->orderBy('base_price', 'desc');
+                break;
+            case 'name_asc':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'latest':
+                $query->latest();
+                break;
+            case 'category':
+            default:
+                $query->orderBy('category_id', 'asc')->orderBy('name', 'asc');
+                break;
+        }
+
+        $products = $query->paginate(25)->withQueryString();
+        return view('admin.products.index', compact('products', 'headquarters', 'categories', 'selectedHqId'));
     }
 
     public function create()
