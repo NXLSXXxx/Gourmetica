@@ -52,10 +52,36 @@ class Product extends Model
     {
         if (static::$hasSortOrderColumn === null) {
             try {
-                static::$hasSortOrderColumn = \Illuminate\Support\Facades\Schema::hasColumn(
-                    'products',
-                    'sort_order'
-                );
+                if (\Illuminate\Support\Facades\Schema::hasColumn('products', 'sort_order')) {
+                    static::$hasSortOrderColumn = true;
+                } elseif (\Illuminate\Support\Facades\Schema::hasTable('products')) {
+                    \Illuminate\Support\Facades\Schema::table('products', function (\Illuminate\Database\Schema\Blueprint $table) {
+                        $table->unsignedInteger('sort_order')->default(0)->after('category_id');
+                    });
+
+                    $categories = \Illuminate\Support\Facades\DB::table('products')
+                        ->select('category_id')
+                        ->distinct()
+                        ->pluck('category_id');
+
+                    foreach ($categories as $categoryId) {
+                        $productIds = \Illuminate\Support\Facades\DB::table('products')
+                            ->where('category_id', $categoryId)
+                            ->orderBy('id', 'asc')
+                            ->pluck('id');
+
+                        $position = 1;
+                        foreach ($productIds as $productId) {
+                            \Illuminate\Support\Facades\DB::table('products')
+                                ->where('id', $productId)
+                                ->update(['sort_order' => $position++]);
+                        }
+                    }
+
+                    static::$hasSortOrderColumn = true;
+                } else {
+                    static::$hasSortOrderColumn = false;
+                }
             } catch (\Throwable $e) {
                 static::$hasSortOrderColumn = false;
             }
