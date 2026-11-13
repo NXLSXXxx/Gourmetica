@@ -11,6 +11,7 @@ class Product extends Model
     use HasAudit;
     protected $fillable = [
         'category_id',
+        'sort_order',
         'name',
         'slug',
         'description',
@@ -37,7 +38,30 @@ class Product extends Model
 
                 $product->slug = $slug;
             }
+
+            if (static::hasSortOrderColumn() && ($product->sort_order === null || $product->sort_order === '')) {
+                $maxOrder = static::where('category_id', $product->category_id)->max('sort_order');
+                $product->sort_order = ((int) $maxOrder) + 1;
+            }
         });
+    }
+
+    protected static ?bool $hasSortOrderColumn = null;
+
+    public static function hasSortOrderColumn(): bool
+    {
+        if (static::$hasSortOrderColumn === null) {
+            try {
+                static::$hasSortOrderColumn = \Illuminate\Support\Facades\Schema::hasColumn(
+                    'products',
+                    'sort_order'
+                );
+            } catch (\Throwable $e) {
+                static::$hasSortOrderColumn = false;
+            }
+        }
+
+        return static::$hasSortOrderColumn;
     }
 
     protected static ?bool $hasIsAvailableColumn = true;

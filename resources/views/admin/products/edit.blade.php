@@ -68,6 +68,12 @@
                     </div>
 
                     <div class="col-span-2">
+                        <label class="block text-sm font-medium text-slate-400 mb-2">Orden / Posición en su Categoría (1°, 2°, 3°...)</label>
+                        <input type="number" min="1" name="sort_order" value="{{ old('sort_order', $product->sort_order ?: 1) }}" class="w-full md:w-1/2 bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all" placeholder="Ej: 1 para primero, 2 para segundo...">
+                        <p class="text-xs text-slate-500 mt-1">Define en qué posición aparecerá este postre dentro de su categoría (1 = primero, 2 = segundo, etc.). Los demás productos se reacomodarán automáticamente.</p>
+                    </div>
+
+                    <div class="col-span-2">
                         <label class="block text-sm font-medium text-slate-400 mb-2">Imagen Actual</label>
                         @if($product->image)
                         <div class="mb-4 relative w-32 h-32">

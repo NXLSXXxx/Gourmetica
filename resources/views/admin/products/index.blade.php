@@ -150,10 +150,17 @@
 
 <!-- Tabla de Productos Organizados por Categoría -->
 <div class="bg-[#1E293B] rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
+    <div class="px-6 py-3 bg-slate-800/80 border-b border-slate-700 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <div class="flex items-center gap-2">
+            <span class="text-brand-secondary font-bold">💡 Ordenar postres:</span>
+            <span>Puedes cambiar el número de posición (<strong class="text-white">1°, 2°, 3°...</strong>), usar las flechas <strong class="text-white">↑ ↓</strong> o arrastrar las filas <strong class="text-white">☰</strong> dentro de cada categoría.</span>
+        </div>
+    </div>
     <div class="overflow-x-auto">
         <table class="w-full text-left">
             <thead>
                 <tr class="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider">
+                    <th class="px-4 py-4 w-36">Orden (1°, 2°...)</th>
                     <th class="px-6 py-4">Producto</th>
                     <th class="px-6 py-4">Categoría</th>
                     <th class="px-6 py-4">Precio Base</th>
@@ -168,15 +175,19 @@
                     <th class="px-6 py-4">Acciones</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-700">
+            <tbody class="divide-y divide-slate-700" id="products-table-body">
                 @php
                     $groupedProducts = $products->getCollection()->groupBy(fn($item) => $item->category ? $item->category->name : 'Sin Categoría');
-                    $colSpan = $selectedHqId ? 8 : 6;
+                    $colSpan = $selectedHqId ? 9 : 7;
                 @endphp
 
                 @forelse($groupedProducts as $categoryName => $categoryProducts)
+                    @php
+                        $catId = $categoryProducts->first()?->category_id ?? 0;
+                        $totalInCat = $categories->firstWhere('id', $catId)?->products_count ?? $categoryProducts->count();
+                    @endphp
                     <!-- Encabezado de Grupo por Categoría -->
-                    <tr class="bg-slate-900/90 border-y border-slate-700">
+                    <tr class="bg-slate-900/90 border-y border-slate-700 category-header-row" data-category-id="{{ $catId }}">
                         <td colspan="{{ $colSpan }}" class="px-6 py-3">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2.5">
@@ -186,18 +197,74 @@
                                         {{ $categoryProducts->count() }} {{ $categoryProducts->count() === 1 ? 'producto' : 'productos' }}
                                     </span>
                                 </div>
+                                <span class="text-[11px] text-slate-500 hidden sm:inline">Ordenados del 1° al {{ $categoryProducts->count() }}°</span>
                             </div>
                         </td>
                     </tr>
 
-                    @foreach($categoryProducts as $product)
+                    @foreach($categoryProducts->values() as $idx => $product)
                     @php
                         $hqPivot = $selectedHqId ? $product->headquarters->firstWhere('id', $selectedHqId)?->pivot : null;
                         $sedePrice = $product->getPriceForHeadquarter($selectedHqId);
                         $hasCustomPrice = $hqPivot && $hqPivot->price !== null && (float)$hqPivot->price > 0;
                         $isAvailInSede = $hqPivot ? (bool)($hqPivot->is_available ?? true) : false;
+                        $displayOrder = ($product->sort_order && $product->sort_order > 0) ? $product->sort_order : ($idx + 1);
                     @endphp
-                    <tr class="hover:bg-slate-800/30 transition-colors">
+                    <tr class="hover:bg-slate-800/30 transition-colors product-row"
+                        draggable="true"
+                        data-product-id="{{ $product->id }}"
+                        data-category-id="{{ $product->category_id }}">
+                        <!-- Columna de Orden (1°, 2°, 3°...) -->
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-1.5">
+                                <!-- Drag Handle -->
+                                <span class="cursor-grab active:cursor-grabbing text-slate-500 hover:text-brand-secondary px-1 select-none" title="Arrastrar para reordenar">
+                                    ☰
+                                </span>
+
+                                <!-- Selector / Input directo de Posición (1°, 2°, 3°...) -->
+                                <form action="{{ route('admin.products.reorder') }}" method="POST" class="inline-flex items-center">
+                                    @csrf
+                                    <input type="hidden" name="product_id" value="{{ $product->id }}">
+                                    <select name="position"
+                                            onchange="this.form.submit()"
+                                            title="Elegir qué número de orden ocupa este postre en su categoría"
+                                            class="bg-slate-900 border border-slate-700 hover:border-brand-secondary focus:border-brand-secondary rounded-lg px-2 py-1 text-xs font-bold text-brand-secondary outline-none cursor-pointer">
+                                        @for($pos = 1; $pos <= max($totalInCat, $displayOrder); $pos++)
+                                            <option value="{{ $pos }}" {{ $displayOrder == $pos ? 'selected' : '' }}>
+                                                {{ $pos }}°
+                                            </option>
+                                        @endfor
+                                    </select>
+                                </form>
+
+                                <!-- Botones Subir (↑) y Bajar (↓) -->
+                                <div class="flex flex-col gap-0.5">
+                                    <form action="{{ route('admin.products.reorder') }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="product_id" value="{{ $product->id }}">
+                                        <input type="hidden" name="direction" value="up">
+                                        <button type="submit"
+                                                {{ $idx === 0 ? 'disabled' : '' }}
+                                                title="Subir una posición"
+                                                class="p-0.5 rounded bg-slate-800 hover:bg-brand-secondary hover:text-brand-dark text-slate-400 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"></path></svg>
+                                        </button>
+                                    </form>
+                                    <form action="{{ route('admin.products.reorder') }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="product_id" value="{{ $product->id }}">
+                                        <input type="hidden" name="direction" value="down">
+                                        <button type="submit"
+                                                {{ $idx === $categoryProducts->count() - 1 ? 'disabled' : '' }}
+                                                title="Bajar una posición"
+                                                class="p-0.5 rounded bg-slate-800 hover:bg-brand-secondary hover:text-brand-dark text-slate-400 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
                         <td class="px-6 py-4">
                             <div class="flex items-center">
                                 <div class="w-10 h-10 rounded-lg bg-slate-700 overflow-hidden mr-4 flex-shrink-0">
@@ -311,4 +378,70 @@
         {{ $products->links() }}
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    let draggedRow = null;
+
+    document.querySelectorAll('.product-row').forEach(row => {
+        row.addEventListener('dragstart', function (e) {
+            draggedRow = this;
+            this.classList.add('opacity-50', 'bg-slate-800');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        row.addEventListener('dragend', function () {
+            this.classList.remove('opacity-50', 'bg-slate-800');
+            draggedRow = null;
+        });
+
+        row.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            if (!draggedRow || draggedRow === this) return;
+            // Solo permitir arrastrar dentro de la misma categoría
+            if (draggedRow.dataset.categoryId !== this.dataset.categoryId) return;
+
+            const tbody = this.parentNode;
+            const rows = Array.from(tbody.querySelectorAll(`.product-row[data-category-id="${this.dataset.categoryId}"]`));
+            const draggedIndex = rows.indexOf(draggedRow);
+            const targetIndex = rows.indexOf(this);
+
+            if (draggedIndex < targetIndex) {
+                tbody.insertBefore(draggedRow, this.nextSibling);
+            } else {
+                tbody.insertBefore(draggedRow, this);
+            }
+        });
+
+        row.addEventListener('drop', function (e) {
+            e.preventDefault();
+            if (!draggedRow) return;
+            const categoryId = this.dataset.categoryId;
+            if (draggedRow.dataset.categoryId !== categoryId) return;
+
+            const categoryRows = Array.from(document.querySelectorAll(`.product-row[data-category-id="${categoryId}"]`));
+            const orderedIds = categoryRows.map(r => r.dataset.productId);
+
+            fetch('{{ route("admin.products.reorder") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ ordered_ids: orderedIds })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                }
+            })
+            .catch(err => console.error(err));
+        });
+    });
+});
+</script>
 @endsection

@@ -76,7 +76,11 @@ class ShopController extends Controller
                 break;
             case 'category':
             default:
-                $query->orderBy('category_id', 'asc')->orderBy('name', 'asc');
+                $query->orderBy('category_id', 'asc');
+                if (\App\Models\Product::hasSortOrderColumn()) {
+                    $query->orderBy('sort_order', 'asc');
+                }
+                $query->orderBy('name', 'asc');
                 break;
         }
 
@@ -135,6 +139,10 @@ class ShopController extends Controller
         if ($selectedHqId) {
             $query->availableInHeadquarter($selectedHqId);
         }
+        if (\App\Models\Product::hasSortOrderColumn()) {
+            $query->orderBy('sort_order', 'asc');
+        }
+        $query->orderBy('name', 'asc');
         $products = $query->take(6)->get()->map(function($product) use ($selectedHqId) {
             $product->price = $product->getPriceForHeadquarter($selectedHqId);
             return $product;

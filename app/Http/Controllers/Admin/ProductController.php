@@ -89,7 +89,7 @@ class ProductController extends Controller
             }
         }
 
-        // Ordenamiento (por defecto organizado por categoría y nombre)
+        // Ordenamiento (por defecto organizado por categoría y orden personalizado 1°, 2°, 3°...)
         $sort = $request->input('sort', 'category');
         switch ($sort) {
             case 'price_asc':
@@ -109,12 +109,113 @@ class ProductController extends Controller
                 break;
             case 'category':
             default:
-                $query->orderBy('category_id', 'asc')->orderBy('name', 'asc');
+                $query->orderBy('category_id', 'asc');
+                if (\App\Models\Product::hasSortOrderColumn()) {
+                    $query->orderBy('sort_order', 'asc');
+                }
+                $query->orderBy('name', 'asc');
                 break;
         }
 
-        $products = $query->paginate(25)->withQueryString();
+        $products = $query->paginate(50)->withQueryString();
         return view('admin.products.index', compact('products', 'headquarters', 'categories', 'selectedHqId'));
+    }
+
+    /**
+     * Reubica un producto en una posición específica (1°, 2°, 3°...) dentro de su categoría
+     * y renumera secuencialmente los demás productos de la categoría.
+     */
+    protected function placeProductAtPosition(\App\Models\Product $product, int $targetPosition): void
+    {
+        if (!\App\Models\Product::hasSortOrderColumn()) {
+            return;
+        }
+
+        $siblings = \App\Models\Product::where('category_id', $product->category_id)
+            ->where('id', '!=', $product->id)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->values();
+
+        $clampedIndex = max(0, min($targetPosition - 1, $siblings->count()));
+        $siblings->splice($clampedIndex, 0, [$product]);
+
+        foreach ($siblings as $idx => $item) {
+            $newOrder = $idx + 1;
+            if ((int) $item->sort_order !== $newOrder) {
+                \App\Models\Product::where('id', $item->id)->update(['sort_order' => $newOrder]);
+                if ($item->id === $product->id) {
+                    $product->sort_order = $newOrder;
+                }
+            }
+        }
+    }
+
+    /**
+     * Endpoint para ordenar la lista de postres/productos (1°, 2°, 3°...)
+     * Soporta drag & drop (ordered_ids), cambio directo de posición (position) o botones subir/bajar (direction).
+     */
+    public function reorder(Request $request)
+    {
+        if (!\App\Models\Product::hasSortOrderColumn()) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Columna sort_order no disponible.'], 400);
+            }
+            return back()->with('error', 'Ejecuta las migraciones pendientes para habilitar el ordenamiento.');
+        }
+
+        // Caso 1: Lista completa de IDs ordenados (Drag & Drop)
+        if ($request->filled('ordered_ids') && is_array($request->ordered_ids)) {
+            foreach (array_values($request->ordered_ids) as $index => $id) {
+                \App\Models\Product::where('id', (int) $id)->update(['sort_order' => $index + 1]);
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => 'Orden actualizado correctamente.']);
+            }
+            return back()->with('success', 'Orden de productos actualizado correctamente.');
+        }
+
+        // Caso 2: Mover un producto específico por posición numérica (1°, 2°, 3°...) o dirección (up/down)
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'position' => 'nullable|integer|min:1',
+            'direction' => 'nullable|in:up,down',
+        ]);
+
+        $product = \App\Models\Product::findOrFail($request->product_id);
+
+        // Asegurar que la categoría tenga orden secuencial base antes de mover
+        $categoryProducts = \App\Models\Product::where('category_id', $product->category_id)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->values();
+
+        $currentIndex = $categoryProducts->search(fn($item) => $item->id === $product->id);
+        $currentPosition = $currentIndex !== false ? $currentIndex + 1 : 1;
+
+        if ($request->filled('position')) {
+            $targetPosition = (int) $request->position;
+        } elseif ($request->direction === 'up') {
+            $targetPosition = max(1, $currentPosition - 1);
+        } elseif ($request->direction === 'down') {
+            $targetPosition = min($categoryProducts->count(), $currentPosition + 1);
+        } else {
+            $targetPosition = $currentPosition;
+        }
+
+        $this->placeProductAtPosition($product, $targetPosition);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "Posición de {$product->name} actualizada a #{$product->sort_order}.",
+            ]);
+        }
+
+        return back()->with('success', "Se ubicó \"{$product->name}\" en la posición #{$product->sort_order}.");
     }
 
     public function create()
@@ -130,6 +231,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
+            'sort_order' => 'nullable|integer|min:1',
             'base_price' => 'required|numeric',
             'description' => 'nullable|string',
             'image' => 'nullable|image|max:10240',
@@ -160,6 +262,10 @@ class ProductController extends Controller
             'image' => $imagePath,
             'is_active' => true,
         ]);
+
+        if (!empty($validated['sort_order'])) {
+            $this->placeProductAtPosition($product, (int) $validated['sort_order']);
+        }
 
         if ($request->has('headquarters') && is_array($request->headquarters)) {
             $syncData = [];
@@ -227,6 +333,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
+            'sort_order' => 'nullable|integer|min:1',
             'base_price' => 'required|numeric',
             'description' => 'nullable|string',
             'image' => 'nullable|image|max:10240',
@@ -265,6 +372,10 @@ class ProductController extends Controller
             'image' => $newImagePath ?? $product->image,
             'is_active' => $request->has('is_active'),
         ]);
+
+        if (!empty($validated['sort_order'])) {
+            $this->placeProductAtPosition($product, (int) $validated['sort_order']);
+        }
 
         if ($newImagePath && $oldImagePath) {
             \Illuminate\Support\Facades\Storage::disk('public')->delete($oldImagePath);

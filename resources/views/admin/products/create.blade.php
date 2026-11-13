@@ -56,6 +56,12 @@
                         <label class="block text-sm font-medium text-slate-400 mb-2">Precio Base (S/)</label>
                         <input type="number" step="0.01" name="base_price" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all" placeholder="0.00">
                     </div>
+
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-slate-400 mb-2">Orden / Posición en su Categoría (1°, 2°, 3°...)</label>
+                        <input type="number" min="1" name="sort_order" value="{{ old('sort_order') }}" class="w-full md:w-1/2 bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-brand-primary outline-none transition-all" placeholder="Ej: 1 para que aparezca primero (opcional)">
+                        <p class="text-xs text-slate-500 mt-1">Indica en qué lugar de la lista se mostrará este postre (1 = primero, 2 = segundo, etc.). Si lo dejas vacío, se colocará al final.</p>
+                    </div>
                     
                     <div class="col-span-2">
                         <label class="block text-sm font-medium text-slate-400 mb-2">Imagen del Producto</label>

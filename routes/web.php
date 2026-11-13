@@ -110,6 +110,7 @@ Route::middleware(['admin'])->prefix('intranet')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('intranet.dashboard');
     Route::get('/clients', [ClientController::class, 'index'])->name('admin.clients');
     Route::get('/clients/{id}', [ClientController::class, 'show'])->name('admin.clients.show');
+    Route::post('/products/reorder', [ProductController::class, 'reorder'])->name('admin.products.reorder');
     Route::resource('/products', ProductController::class)->names('admin.products');
     Route::resource('/categories', CategoryController::class)->names('admin.categories');
     Route::middleware(['can:manage-headquarters'])->group(function () {
